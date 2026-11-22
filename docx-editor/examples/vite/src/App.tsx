@@ -9,8 +9,11 @@ import {
   type Document as DocxDocument,
   createEmptyDocument,
   PresenceCluster,
+  parseDocx,
   useTranslation,
 } from '@casualoffice/docs';
+import { prosemirrorToYXmlFragment } from 'y-prosemirror';
+import { toProseDoc } from '@eigenpal/docx-core/prosemirror/conversion';
 import { useCollab } from './collab/useCollab';
 import { StatusBadge } from './collab/StatusBadge';
 import { ShareDialog } from './collab/Share';
@@ -557,6 +560,15 @@ export function App() {
     const kindParam = params.get('kind');
     const kind: 'docx' | 'markdown' | 'text' =
       kindParam === 'text' ? 'text' : kindParam === 'markdown' ? 'markdown' : 'docx';
+    // Fork patch: the collab server gates anonymous WS joins by the `role`
+    // query param on the WS upgrade URL (absent role → server-side
+    // read-only). Forward a page-level `?role=edit` grant onto the WS
+    // handshake, otherwise the joiner can't capture the room seed into
+    // the Y.Doc and every seeded share renders empty.
+    const pageRole = params.get('role');
+    if (pageRole && !/[?&]role=/.test(backend)) {
+      backend = `${backend}${backend.includes('?') ? '&' : '?'}role=${encodeURIComponent(pageRole)}`;
+    }
     return { room, backend, kind };
   }, [isDesktop]);
 
@@ -576,18 +588,29 @@ export function App() {
     const params = new URLSearchParams(window.location.search);
     const env = (import.meta as { env?: Record<string, string> }).env?.VITE_COLLAB_BACKEND;
     const ws = params.get('collab') || env || params.get('backend');
-    if (ws) return ws;
+    if (ws) {
+      // Fork patch: forward the page-level role grant onto the WS URL
+      // (see the collabParams comment for why this is required).
+      const pageRole = params.get('role');
+      if (pageRole && !/[?&]role=/.test(ws)) {
+        return `${ws}${ws.includes('?') ? '&' : '?'}role=${encodeURIComponent(pageRole)}`;
+      }
+      return ws;
+    }
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${window.location.host}/yjs`;
   }, []);
-  const collabHttp = useMemo(
-    () =>
-      collabWs
-        .replace(/^wss:/, 'https:')
-        .replace(/^ws:/, 'http:')
-        .replace(/\/yjs\/?$/, ''),
-    [collabWs]
-  );
+  const collabHttp = useMemo(() => {
+    // Fork patch: strip any query (e.g. ?role=edit forwarded to the WS)
+    // BEFORE the /yjs suffix replace — the regex anchors at the string
+    // end, so a trailing query made the REST origin derive wrong and
+    // seed upload/download 404'd.
+    return collabWs
+      .split(/[?#]/)[0]
+      .replace(/^wss:/, 'https:')
+      .replace(/^ws:/, 'http:')
+      .replace(/\/yjs\/?$/, '');
+  }, [collabWs]);
 
   // Local-user identity for awareness. M2 will prompt for a name +
   // colour; M1 ships an anonymous fallback so co-edit works
@@ -1701,7 +1724,7 @@ function CollabApp({
   onError,
   onFontsLoaded,
 }: CollabAppProps) {
-  const { plugins, status, peers, metaMap } = useCollab({ room, backend, user });
+  const { plugins, status, peers, metaMap, synced } = useCollab({ room, backend, user });
   const [seed, setSeed] = useState<SeedState>({ kind: 'loading' });
   // Bumped via "Try again" to re-trigger the fetch effect.
   const [attempt, setAttempt] = useState(0);
@@ -1724,6 +1747,49 @@ function CollabApp({
       metaMap.unobserve(apply);
     };
   }, [metaMap]);
+
+  // Initialize an empty room from its DOCX seed before mounting DocxEditor.
+  // ySyncPlugin treats the Y.Doc as authoritative when its view is created;
+  // mounting with an empty fragment first wipes the editor's prop-loaded
+  // document. Importing here makes the fragment authoritative before the
+  // first ProseMirror view, so the seed is visible and shared to every peer.
+  const [collabSeedReady, setCollabSeedReady] = useState(false);
+  useEffect(() => {
+    if (!synced || seed.kind !== 'ready' || collabSeedReady) return;
+    const fragment = metaMap.doc?.getXmlFragment('prosemirror');
+    if (!fragment) return;
+    // A peer may already have populated the shared room while this browser
+    // fetched the seed. Don't replace live collaborative content.
+    if (fragment.length > 0) {
+      setCollabSeedReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    const seedBuffer = seed.buffer;
+    void (async () => {
+      try {
+        const document = await parseDocx(seedBuffer);
+        if (cancelled) return;
+        // Recheck after parsing to reduce duplicate bootstrap attempts if
+        // another peer has already populated the fragment. This client-side
+        // check is not an atomic server-side claim; see deploy/README.md.
+        if (fragment.length === 0) {
+          const pmDocument = toProseDoc(document, { styles: document.package.styles });
+          prosemirrorToYXmlFragment(pmDocument, fragment);
+        }
+        setCollabSeedReady(true);
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        setSeed({ kind: 'error', message });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [synced, seed, metaMap, collabSeedReady]);
 
   // When the user renames locally, write into metaMap → Yjs fans the
   // change to every peer. The Y.Doc is the single source of truth for
@@ -1798,6 +1864,8 @@ function CollabApp({
   if (seed.kind === 'error') {
     return <ErrorPanel error={seed.message} onRetry={() => setAttempt((n) => n + 1)} />;
   }
+
+  if (!collabSeedReady) return <LoadingPanel />;
 
   return (
     <div style={styles.container}>

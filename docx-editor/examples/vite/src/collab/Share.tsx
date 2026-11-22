@@ -214,7 +214,14 @@ export function ShareDialog({
       .then((roomId) => {
         const url = new URL(window.location.origin);
         url.searchParams.set('room', roomId);
-        url.searchParams.set('backend', backendWs);
+        // Casual shared rooms are edit links: App.tsx forwards this grant
+        // to the Hocuspocus WS URL, where the server enforces it.
+        url.searchParams.set('role', 'edit');
+        const sameOriginWs =
+          `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/yjs`;
+        // Production's SPA and collab API share one origin, so omit the
+        // redundant backend override. Keep it for split-origin dev hosts.
+        if (backendWs !== sameOriginWs) url.searchParams.set('backend', backendWs);
         setShareUrl(url.toString());
         setState('ready');
       })
