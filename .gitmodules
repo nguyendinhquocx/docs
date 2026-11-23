@@ -3,4 +3,4 @@
 	url = git@github.com:CasualOffice/design-book.git
 [submodule "collab"]
 	path = collab
-	url = git@github.com:CasualOffice/collab.git
+	url = https://github.com/nguyendinhquocx/collab.git

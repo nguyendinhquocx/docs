@@ -30,7 +30,7 @@
 | OQ | Quyết định | Chi tiết |
 | --- | --- | --- |
 | OQ1 Owner identity | Email cá nhân `quocnguyent10v@gmail.com` | Team domain Cloudflare Access cấu hình lúc cutover qua runtime settings (`CF_ACCESS_TEAM_DOMAIN`), không hardcode vào source. |
-| OQ2 Server repo | Duyệt fork `nguyendinhquocx/collab` | Giữ remote `upstream` trỏ `CasualOffice/collab`; trỏ submodule sang fork trước khi sửa collab. |
+| OQ2 Server repo | Duyệt fork `nguyendinhquocx/collab` | Giữ remote `upstream` trỏ `CasualOffice/collab`; trỏ submodule sang fork trước khi sửa collab. **Resolved push (2026-11-22, owner chốt qua ask_user):** chọn private mirror. EP đã commit toàn bộ thay đổi collab lên branch `feat/docs-personal-workspace` và push tới `https://github.com/nguyendinhquocx/collab.git` (private; mirror `main` cùng code); `.gitmodules` trỏ mirror. Remote `origin` submodule vẫn trỏ `CasualOffice/collab` để nhận upstream. Lưu ý cutover: clone mirror private ở ProDesk cần credential riêng (gh token hoặc SSH deploy key). |
 | OQ3 Owner sign-in | Access + app session (2 lớp) | Yêu cầu owner: app session giữ tối thiểu 30–60 ngày trước khi phải đăng nhập lại (session cookie dài hạn + Cloudflare Access session duration tương ứng lúc cutover). |
 | OQ4 Guest host | `docx.quoc.app` | Owner chọn hostname riêng cho guest share (thay khuyến nghị `docs-share` ban đầu); không Access, chỉ phục vụ link hợp lệ. DNS/tunnel tạo ở cutover sau human gate. |
 | OQ5 Agent auth | Agent trong browser owner | Agent thao tác trong editor đã owner-authenticated, quyền = owner trust boundary; không cấp client riêng trong V1. |
