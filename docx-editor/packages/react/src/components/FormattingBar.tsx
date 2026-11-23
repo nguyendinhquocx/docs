@@ -385,6 +385,7 @@ export function FormattingBar(explicitProps: FormattingBarProps) {
       role={inline ? undefined : 'toolbar'}
       aria-label={inline ? undefined : t('toolbar.ariaLabel')}
       data-testid={inline ? undefined : 'formatting-bar'}
+      data-docs-ribbon={inline ? undefined : 'true'}
       onMouseDown={inline ? undefined : handleBarMouseDown}
       onMouseUp={inline ? undefined : handleBarMouseUp}
     >

@@ -25,6 +25,8 @@ export interface AutosaveStatusProps {
   className?: string;
   /** Data-testid for E2E. Defaults to 'autosave-status'. */
   testId?: string;
+  /** Hide persistent successful-save text while retaining pending/error feedback. */
+  showSaved?: boolean;
   /**
    * Override the "last saved" label. Defaults to the relative
    * format ("just now" / "1 minute ago" / "5 minutes ago"). Hosts
@@ -37,6 +39,7 @@ export function AutosaveStatus({
   state,
   className,
   testId = 'autosave-status',
+  showSaved = true,
   formatLastSaved = defaultFormatRelative,
 }: AutosaveStatusProps) {
   // Re-render every 30s so the relative time label drifts forward
@@ -44,13 +47,16 @@ export function AutosaveStatus({
   // component unmounts; cheap to leave running otherwise.
   const [, forceTick] = useState(0);
   useEffect(() => {
-    if (!state.lastSavedAt) return;
+    if (!showSaved || !state.lastSavedAt) return;
     const id = setInterval(() => forceTick((n) => n + 1), 30000);
     return () => clearInterval(id);
-  }, [state.lastSavedAt]);
+  }, [state.lastSavedAt, showSaved]);
 
   const label = render(state.status, state.lastSavedAt, state.pendingError, formatLastSaved);
-  if (label === null) return null;
+  const isSaved =
+    state.status === 'saved' ||
+    (state.status === 'idle' && Boolean(state.lastSavedAt) && !state.pendingError);
+  if (label === null || (!showSaved && isSaved)) return null;
 
   // A failed save (even after its badge auto-clears) is a problem state — never
   // paint it in the neutral "saved" color.

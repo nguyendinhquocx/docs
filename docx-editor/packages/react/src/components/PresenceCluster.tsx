@@ -38,6 +38,8 @@ export interface PresenceClusterProps {
   peers: PresencePeer[];
   /** Realtime room status → drives the status badge. Omit for non-collab docs. */
   status?: 'connecting' | 'connected' | 'disconnected';
+  /** Use neutral white avatars with a thin ink outline instead of palette fills. */
+  monochrome?: boolean;
   /** True while an AI request is running for this room → shows an "AI is editing" chip. */
   aiIsEditing?: boolean;
   /**
@@ -89,6 +91,7 @@ const aiChipStyle: CSSProperties = {
 export function PresenceCluster({
   peers,
   status,
+  monochrome = false,
   onShare,
   maxAvatars = 4,
   aiIsEditing = false,
@@ -118,8 +121,16 @@ export function PresenceCluster({
           max={maxAvatars}
           people={peers.map((p) => ({
             name: p.name,
-            color: p.color,
-            active: p.active ?? true,
+            color: monochrome ? '#fff' : p.color,
+            active: monochrome ? false : (p.active ?? true),
+            style: monochrome
+              ? {
+                  background: 'var(--doc-surface, #fff)',
+                  border: '1px solid var(--doc-text-on-surface, #111)',
+                  boxShadow: 'none',
+                  color: 'var(--doc-text-on-surface, #111)',
+                }
+              : undefined,
           }))}
         />
       )}

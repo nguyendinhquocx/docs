@@ -1809,7 +1809,7 @@
     "minutesAgo": "{n} phút trước",
     "hoursAgo": "{n} giờ trước",
     "daysAgo": "{n, plural, one {# ngày trước} other {# ngày trước}}",
-    "myFiles": "Tài liệu của mày",
+    "myFiles": "Tài liệu của bạn",
     "myFilesHint": "Lưu trên máy chủ riêng — vẫn còn sau khi tải lại hoặc khởi động lại",
     "myFilesEmpty": "Chưa có tài liệu đã lưu. Tạo tài liệu mới hoặc mở tệp .docx.",
     "workspaceTitle": "Không gian làm việc của mày",

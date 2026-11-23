@@ -64,8 +64,8 @@
 @media (max-width: 768px) {
   /* The editor toolbar is a horizontal task strip on phones. Preserve a
    * 44px touch target and scroll the strip, never the page. The editor
-   * root carries the .n class (see packages/react editor.css). */
-  .n [role='toolbar'] {
+   * root carries the .ep-root class (verified in the rendered editor DOM). */
+  .ep-root [role='toolbar'] {
     padding: 4px 4px;
     gap: 0;
     overflow-x: auto;
@@ -75,20 +75,86 @@
     scrollbar-width: none;
     min-height: 44px;
   }
-  .n [role='toolbar'] button,
-  .n [role='toolbar'] [role='button'] {
+  .ep-root [role='toolbar'] button,
+  .ep-root [role='toolbar'] [role='button'] {
     min-width: 44px !important;
     min-height: 44px !important;
   }
-  .n [role='toolbar']::-webkit-scrollbar {
+  .ep-root [role='toolbar']::-webkit-scrollbar {
     display: none;
   }
 }
 
-/* On phones the floating connection pill overlaps the guest header
- * controls; the header presence cluster already shows status. */
-@media (max-width: 620px) {
-  .collab-status-badge {
-    display: none !important; /* inline style otherwise wins */
-  }
+/* UAT: keep the formatting ribbon white; the editor package's default
+ * subtle-gray pill remains unchanged for every other host. */
+:root[data-web-docs='true']:not([data-theme='dark']) .ep-root [data-docs-ribbon='true'] {
+  background-color: #fff !important;
+}
+
+:root[data-web-docs='true'] .ep-root [data-testid='header-theme-toggle'] {
+  display: none !important; /* Theme remains available in View. */
+}
+
+:root[data-theme='dark'] .docs-brand-icon,
+:root[data-theme='dark'] .docs-share-icon,
+:root[data-theme='dark'] .docs-share-copy-icon {
+  filter: invert(1);
+}
+
+/* Docs header actions are icon-only. Keep focus/hover perceivable without
+ * the persistent outline around the share control. */
+.docs-share-icon-button,
+.docs-share-copy-button,
+.docs-locale-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0 !important;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text, #111);
+  cursor: pointer;
+}
+
+.docs-share-icon-button {
+  width: 44px;
+  padding: 0;
+}
+
+.docs-share-copy-button {
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.docs-share-icon-button:hover,
+.docs-share-copy-button:hover,
+.docs-share-revoke-button:hover,
+.docs-locale-button:hover,
+.docs-share-icon-button:focus-visible,
+.docs-share-copy-button:focus-visible,
+.docs-share-revoke-button:focus-visible,
+.docs-locale-button:focus-visible {
+  border: 0 !important;
+  background: var(--color-hover, #f0f0f0);
+  outline: none;
+  box-shadow: none;
+}
+
+.docs-locale-button:hover,
+.docs-locale-button:focus-visible {
+  background: var(--color-hover, #f0f0f0) !important;
+}
+
+:root[data-web-docs='true'] .ep-root [data-testid='status-bar'] {
+  border-top: 0 !important;
+  background: var(--doc-surface, #fff);
+}
+
+.docs-share-revoke-button {
+  border: 0 !important;
+  background: transparent;
+  color: var(--color-text-secondary, #666);
+  cursor: pointer;
 }

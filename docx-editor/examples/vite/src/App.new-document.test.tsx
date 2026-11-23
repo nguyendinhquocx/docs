@@ -4,6 +4,16 @@
 
 import React from 'react';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
+
+const translateForTest = (key: string) =>
+  ({
+    'home.createNew': 'Create new',
+    'home.categoryPersonal': 'Personal',
+    'home.templateBlankDocument': 'Blank document',
+    'home.templateBlankMarkdown': 'Blank Markdown',
+    'home.templateResume': 'Resume',
+    'home.categoryCareer': 'Career',
+  })[key] ?? key;
 import { afterAll, afterEach, expect, mock, test } from 'bun:test';
 
 GlobalRegistrator.register();
@@ -14,10 +24,13 @@ mock.module('@casualoffice/docs', () => ({
     <div data-testid="docx-editor" data-child-count={document?.children?.length ?? -1} />
   ),
   PersonalAuthGate: ({ children }: { children: React.ReactNode }) => children,
+  PersonalFileSource: class {},
   PresenceCluster: () => null,
   UserMenu: () => null,
+  useTranslation: () => ({ t: translateForTest }),
   convertToDocx: async () => new ArrayBuffer(0),
   createEmptyDocument: () => ({ type: 'document', children: [] }),
+  parseDocx: async () => ({}),
   deleteRecentFile: async () => undefined,
   formatFromFilename: () => 'docx',
   formatSize: (size: number) => `${size} B`,
@@ -37,7 +50,9 @@ mock.module('./collab/DisconnectedBanner', () => ({ DisconnectedBanner: () => nu
 mock.module('./markdown/MarkdownEditor', () => ({
   MarkdownEditor: ({ onBack }: { onBack: () => void }) => (
     <div data-testid="markdown-editor">
-      <button type="button" onClick={onBack}>Back</button>
+      <button type="button" onClick={onBack}>
+        Back
+      </button>
     </div>
   ),
 }));
@@ -63,8 +78,11 @@ mock.module('./router', () => ({
 const { act, cleanup, fireEvent, render } = await import('@testing-library/react');
 const { App } = await import('./App');
 
+const originalConfirm = window.confirm;
+
 afterEach(() => {
   cleanup();
+  window.confirm = originalConfirm;
   window.history.replaceState(null, '', '/');
   delete window.__deskApp__;
   loadTemplateImpl = async () => ({
@@ -94,11 +112,13 @@ test('blank Markdown clears the desktop file binding', () => {
 
 test('blank DOCX clears previous Markdown state and the desktop file binding', () => {
   window.history.replaceState(null, '', '/');
-  window.confirm = () => true;
+  const confirm = mock(() => true);
+  window.confirm = confirm;
   const view = render(<App />);
 
   fireEvent.click(view.getByRole('button', { name: 'Blank Markdown — Personal' }));
   fireEvent.click(view.getByRole('button', { name: 'Back' }));
+  expect(confirm).not.toHaveBeenCalled();
   window.__deskApp__ = {
     isDesktop: true,
     filePath: 'C:\\previous.docx',
@@ -112,9 +132,10 @@ test('blank DOCX clears previous Markdown state and the desktop file binding', (
 
 test('a late template load cannot replace a newer blank document', async () => {
   let resolveTemplate!: (value: Awaited<ReturnType<typeof loadTemplateImpl>>) => void;
-  loadTemplateImpl = () => new Promise((resolve) => {
-    resolveTemplate = resolve;
-  });
+  loadTemplateImpl = () =>
+    new Promise((resolve) => {
+      resolveTemplate = resolve;
+    });
   const view = render(<App />);
 
   fireEvent.click(view.getAllByRole('button', { name: 'Resume — Career' })[0]);

@@ -28,7 +28,6 @@ import { useCollab } from './collab/useCollab';
 import { DisconnectedBanner } from './collab/DisconnectedBanner';
 import { ErrorPanel } from './collab/ErrorPanel';
 import { LoadingPanel } from './collab/LoadingPanel';
-import { StatusBadge } from './collab/StatusBadge';
 import {
   commitSave,
   fetchShareMetaOrThrow,
@@ -299,20 +298,10 @@ function GuestRoom({
         if (fragment.length === 0) {
           prosemirrorToYXmlFragment(toProseDoc(doc, { styles: doc.package.styles }), fragment);
         }
-        // The Hocuspocus update is asynchronous; the server verifies the
-        // live Y.Doc fragment and flushes storage. Bounded retry handles
-        // the normal WS propagation delay without duplicate imports.
-        let committed = false;
-        for (let attempt = 0; attempt < 10 && !cancelled; attempt++) {
-          try {
-            await markSeedDone('', token);
-            committed = true;
-            break;
-          } catch {
-            await new Promise((resolve) => setTimeout(resolve, 200));
-          }
-        }
-        if (!committed && !cancelled) throw new Error('seed-update-not-persisted');
+        // The server waits a bounded interval for this WS update to arrive,
+        // verifies the live fragment and flushes it before accepting the lease.
+        // A real failure stays recoverable through the guest retry panel.
+        await markSeedDone('', token);
         if (!cancelled) setMountReady(true);
       } catch (err) {
         if (!cancelled) {
@@ -437,7 +426,14 @@ function GuestRoom({
           borderBottom: '1px solid var(--color-divider, #e5e5e5)',
         }}
       >
-        <img src="/logo.svg" alt="" aria-hidden="true" width={24} height={24} />
+        <img
+          className="docs-brand-icon"
+          src="/logo.svg"
+          alt=""
+          aria-hidden="true"
+          width={24}
+          height={24}
+        />
         <span
           style={{
             fontSize: 14,
@@ -461,11 +457,9 @@ function GuestRoom({
         >
           {saveState === 'saving'
             ? t('collab.savingToServer')
-            : saveState === 'saved'
-              ? t('collab.savedToServer')
-              : saveState === 'error'
-                ? t('collab.saveError')
-                : ''}
+            : saveState === 'error'
+              ? t('collab.saveError')
+              : ''}
         </span>
         <button
           type="button"
@@ -518,7 +512,7 @@ function GuestRoom({
         </button>
         <PresenceCluster
           peers={peers.map((p) => ({ name: p.name, color: p.color, active: true }))}
-          status={status}
+          monochrome
         />
       </header>
       {readOnly && (
@@ -547,6 +541,7 @@ function GuestRoom({
           hideLocalSaveStatus
           disableBrowserAutosave
           hideAutosaveRestoreBanner
+          disableBeforeUnloadWarning
           author={user.name}
           readOnly={readOnly}
           showToolbar={!readOnly}
@@ -560,7 +555,6 @@ function GuestRoom({
           renderTitleBarRight={() => null}
         />
       </main>
-      <StatusBadge status={status} peers={peers} />
     </div>
   );
 }

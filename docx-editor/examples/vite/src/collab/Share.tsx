@@ -33,6 +33,8 @@ export interface ShareDialogProps {
   fileEtag: string | null;
   fileName: string;
   collabHttp: string;
+  /** The owner is already in the shared Y.Doc, so don't use the solo file-save route. */
+  skipCurrentFileSave?: boolean;
   /** Serialize the CURRENT editor state to DOCX bytes (used to persist
    *  a draft before its first share). */
   serializeDoc: () => Promise<ArrayBuffer>;
@@ -65,8 +67,8 @@ const styles: Record<string, CSSProperties> = {
   },
   card: {
     background: 'var(--color-surface-raised, #fff)',
-    borderRadius: 12,
-    padding: '24px 28px',
+    borderRadius: 18,
+    padding: '20px 24px',
     maxWidth: 520,
     width: '90%',
     maxHeight: '86vh',
@@ -77,14 +79,8 @@ const styles: Record<string, CSSProperties> = {
   title: {
     fontSize: 17,
     fontWeight: 600,
-    margin: 0,
+    margin: '0 0 16px',
     color: 'var(--color-text, #111)',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: 'var(--color-text-secondary, #666)',
-    margin: '6px 0 20px 0',
-    lineHeight: 1.5,
   },
   urlRow: {
     display: 'flex',
@@ -106,11 +102,15 @@ const styles: Record<string, CSSProperties> = {
   },
   copyBtn: {
     minHeight: 44,
-    padding: '10px 16px',
-    background: 'var(--color-surface-raised, #fff)',
+    padding: '8px 12px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    background: 'transparent',
     color: 'var(--color-text, #111)',
-    border: '1px solid var(--color-divider, #e5e5e5)',
-    borderRadius: 12,
+    border: 0,
+    borderRadius: 10,
     fontSize: 13,
     fontWeight: 500,
     cursor: 'pointer',
@@ -188,9 +188,9 @@ const styles: Record<string, CSSProperties> = {
     padding: '4px 10px',
     fontSize: 12,
     background: 'transparent',
-    border: '1px solid var(--color-divider, #e5e5e5)',
+    border: 0,
     color: 'var(--color-text-secondary, #666)',
-    borderRadius: 6,
+    borderRadius: 8,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
@@ -212,6 +212,7 @@ export function ShareDialog({
   fileEtag,
   fileName,
   collabHttp,
+  skipCurrentFileSave = false,
   serializeDoc,
   onPersisted,
   onJoinedRoom,
@@ -241,7 +242,7 @@ export function ShareDialog({
         /* list is best-effort */
       }
     },
-    [collabHttp],
+    [collabHttp]
   );
 
   // Kick off mint as soon as the dialog opens. Persisting a draft and
@@ -266,10 +267,11 @@ export function ShareDialog({
         // Always serialize the live editor state before minting. A saved
         // file may have unsaved edits since the last autosave; share must
         // start from the exact state visible in this editor.
-        const bytes = await serializeDoc();
+        const bytes = skipCurrentFileSave && fileId ? null : await serializeDoc();
         let id = fileId;
         let etag = fileEtag;
         if (!id) {
+          if (!bytes) throw new Error('missing document bytes');
           const form = new FormData();
           const blob = new Blob([bytes], {
             type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -286,7 +288,8 @@ export function ShareDialog({
           etag = body.file?.etag ?? null;
           if (!id || !etag) throw new Error('missing file identity');
           setPersistedFileEtag(etag);
-        } else {
+        } else if (!skipCurrentFileSave) {
+          if (!bytes) throw new Error('missing document bytes');
           if (!etag) throw new Error('missing file ETag; reload the file before sharing');
           const saveRes = await fetch(`${collabHttp}/files/${encodeURIComponent(id)}`, {
             method: 'POST',
@@ -308,6 +311,11 @@ export function ShareDialog({
         }
         if (cancelled) return;
         setPersistedFileId(id);
+        if (etag) {
+          setPersistedFileEtag(etag);
+          onPersisted(id, etag);
+        }
+        if (skipCurrentFileSave) await fetchCollabToken(collabHttp, id);
 
         const minted = await mintShareLink(collabHttp, id, { role: 'edit' });
         if (cancelled) return;
@@ -340,13 +348,12 @@ export function ShareDialog({
 
   const joinRoom = useCallback(async () => {
     if (!share || !persistedFileId) return;
-    if (persistedFileEtag) onPersisted(persistedFileId, persistedFileEtag);
     const token = await fetchCollabToken(collabHttp, persistedFileId);
     // Owner room token stays in memory for this tab only — it rides
     // the WS auth frame, never a URL (SPEC transport rule).
     rememberCollabToken(persistedFileId, token);
     onJoinedRoom(persistedFileId, token.roomId);
-  }, [share, persistedFileId, persistedFileEtag, onPersisted, collabHttp, onJoinedRoom]);
+  }, [share, persistedFileId, collabHttp, onJoinedRoom]);
 
   const dismiss = useCallback(() => {
     // A link creates a durable file/room. Closing the ready dialog enters
@@ -374,14 +381,14 @@ export function ShareDialog({
       try {
         await fetch(
           `${collabHttp}/files/${encodeURIComponent(persistedFileId)}/shares/link/${encodeURIComponent(linkId)}`,
-          { method: 'DELETE', credentials: 'include' },
+          { method: 'DELETE', credentials: 'include' }
         );
         await refreshLinks(persistedFileId);
       } finally {
         setBusyLinkId(null);
       }
     },
-    [persistedFileId, collabHttp, refreshLinks],
+    [persistedFileId, collabHttp, refreshLinks]
   );
 
   if (!open) return null;
@@ -390,7 +397,6 @@ export function ShareDialog({
     <div style={styles.backdrop} onClick={dismiss} role="dialog" aria-modal="true">
       <div style={styles.card} onClick={(e) => e.stopPropagation()}>
         <h3 style={styles.title}>{t('collab.shareTitle')}</h3>
-        <p style={styles.subtitle}>{t('collab.shareDescriptionV2')}</p>
 
         {phase === 'error' && <div style={styles.errorBanner}>{errorMsg}</div>}
 
@@ -421,15 +427,23 @@ export function ShareDialog({
                 onFocus={(e) => e.currentTarget.select()}
               />
               <button
+                className="docs-share-copy-button"
                 style={{ ...styles.copyBtn, ...(copied ? styles.copyBtnOk : {}) }}
                 onClick={copy}
+                aria-label={copied ? t('share.copied') : t('hyperlinkPopup.copyLink')}
+                data-testid="share-copy-link"
               >
-                {copied ? t('share.copied') : t('hyperlinkPopup.copyLink')}
+                <img
+                  className="docs-share-copy-icon"
+                  src={copied ? '/icons/check.svg' : '/icons/copy.svg'}
+                  alt=""
+                  aria-hidden="true"
+                  width={16}
+                  height={16}
+                />
+                <span>{copied ? t('share.copied') : t('hyperlinkPopup.copyLink')}</span>
               </button>
             </div>
-            <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px 0' }}>
-              {t('collab.shareFragmentNote')}
-            </p>
             {links.length > 0 && (
               <div style={styles.linkList}>
                 <div style={styles.sectionTitle}>{t('collab.existingLinks')}</div>
@@ -442,6 +456,7 @@ export function ShareDialog({
                         : ''}
                     </span>
                     <button
+                      className="docs-share-revoke-button"
                       style={styles.revokeBtn}
                       disabled={busyLinkId === l.linkId}
                       onClick={() => void revoke(l.linkId)}

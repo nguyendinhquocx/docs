@@ -111,7 +111,7 @@ export function DocumentName({ value, onChange, placeholder, editable = true }: 
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         placeholder={resolvedPlaceholder}
-        className={`absolute inset-0 w-full text-base font-normal text-[color:var(--doc-text-on-surface,#1f2937)] bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-[color:var(--doc-bg-hover,#f1f3f4)] focus:bg-[color:var(--doc-surface,white)] focus:ring-2 focus:ring-[color:var(--doc-primary,#1a73e8)] leading-tight ${focused ? '' : 'truncate'}`}
+        className={`absolute inset-0 w-full text-base font-normal text-[color:var(--doc-text-on-surface,#1f2937)] bg-transparent border-0 outline-none px-2 py-0 rounded hover:bg-[color:var(--doc-bg-hover,#f1f3f4)] focus:bg-[color:var(--doc-bg-hover,#f1f3f4)] focus:ring-0 focus:shadow-none leading-tight ${focused ? '' : 'truncate'}`}
         aria-label={t('titleBar.documentNameAriaLabel')}
       />
     </span>
@@ -222,11 +222,23 @@ function ThemeToggleButton() {
   const options: Array<'light' | 'dark' | 'auto'> = colorThemeOptions?.length
     ? colorThemeOptions
     : ['auto', 'light', 'dark'];
-  const current = options.includes(colorTheme ?? 'auto') ? (colorTheme ?? options[0]!) : options[0]!;
+  const current = options.includes(colorTheme ?? 'auto')
+    ? (colorTheme ?? options[0]!)
+    : options[0]!;
   const next = options[(options.indexOf(current) + 1) % options.length]!;
   const icon = current === 'dark' ? 'dark_mode' : current === 'light' ? 'light_mode' : 'contrast';
-  const currentLabel = current === 'auto' ? t('titleBar.themeSystem') : current === 'dark' ? t('titleBar.themeDark') : t('titleBar.themeLight');
-  const nextLabel = next === 'auto' ? t('titleBar.themeSystem') : next === 'dark' ? t('titleBar.themeDark') : t('titleBar.themeLight');
+  const currentLabel =
+    current === 'auto'
+      ? t('titleBar.themeSystem')
+      : current === 'dark'
+        ? t('titleBar.themeDark')
+        : t('titleBar.themeLight');
+  const nextLabel =
+    next === 'auto'
+      ? t('titleBar.themeSystem')
+      : next === 'dark'
+        ? t('titleBar.themeDark')
+        : t('titleBar.themeLight');
   const actionLabel = t('titleBar.switchTheme', { current: currentLabel, next: nextLabel });
   const button = (
     <button
@@ -234,6 +246,7 @@ function ThemeToggleButton() {
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => onSetColorTheme(next)}
       aria-label={actionLabel}
+      data-testid="header-theme-toggle"
       className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[color:var(--doc-bg-hover,#f1f3f4)] text-[color:var(--doc-text-on-surface,#1f2937)]"
     >
       <MaterialSymbol name={icon} size={18} />
@@ -794,7 +807,8 @@ export function MenuBar() {
               : theme === 'light'
                 ? t('titleBar.themeLight')
                 : t('titleBar.themeDark');
-          const icon = theme === 'auto' ? 'contrast' : theme === 'light' ? 'light_mode' : 'dark_mode';
+          const icon =
+            theme === 'auto' ? 'contrast' : theme === 'light' ? 'light_mode' : 'dark_mode';
           return {
             icon,
             label: `${colorTheme === theme ? '✓ ' : ''}${label}`,
@@ -1198,7 +1212,17 @@ export function MenuBar() {
             ariaLabel={t('titleBar.menuBarAriaLabel')}
             disabled={disabled}
             label={
-              <svg data-testid="menu-overflow" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <svg
+                data-testid="menu-overflow"
+                aria-hidden="true"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              >
                 <path d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             }

@@ -860,6 +860,8 @@ export interface DocxEditorProps {
   disableBrowserAutosave?: boolean;
   /** Hide the legacy restore banner when recovery cannot prove file identity. */
   hideAutosaveRestoreBanner?: boolean;
+  /** Disable the generic browser leave prompt when the host has its own durable save path. */
+  disableBeforeUnloadWarning?: boolean;
   /**
    * BCP-47 language tag for the document CONTENT (e.g. 'en', 'de', 'fr-CA').
    * Set on the editor root so assistive tech pronounces the content in the
@@ -1844,6 +1846,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     hideLocalSaveStatus = false,
     disableBrowserAutosave = false,
     hideAutosaveRestoreBanner = false,
+    disableBeforeUnloadWarning = false,
     documentLang,
     agentPanel,
     wordCompat = false,
@@ -3412,8 +3415,13 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   }, [requestedThemeModeOptions]);
   const [colorTheme, setColorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
     if (typeof window === 'undefined') return 'light';
-    const stored = window.localStorage.getItem('docs.theme') ?? window.localStorage.getItem('casual-editor:color-theme');
-    if ((stored === 'light' || stored === 'dark' || stored === 'auto') && allowedColorThemes.includes(stored)) {
+    const stored =
+      window.localStorage.getItem('docs.theme') ??
+      window.localStorage.getItem('casual-editor:color-theme');
+    if (
+      (stored === 'light' || stored === 'dark' || stored === 'auto') &&
+      allowedColorThemes.includes(stored)
+    ) {
       return stored;
     }
     return allowedColorThemes.includes('light') ? 'light' : (allowedColorThemes[0] ?? 'light');
@@ -3627,10 +3635,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // "Saving…" indicator in the title bar.
   const [isSaving, setIsSaving] = useState(false);
 
-  // beforeunload guard — browsers show the native confirm dialog when
-  // `event.returnValue` is set to a non-empty string (the actual string is
-  // ignored in modern browsers; only the presence matters).
+  // The browser prompt is useful for local-only editors, but a host with a
+  // durable server save path must not block navigation (especially Share or
+  // reload) after its pagehide/visibility flush has been requested.
   useEffect(() => {
+    if (disableBeforeUnloadWarning) return;
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!isDirtyRef.current) return;
       e.preventDefault();
@@ -3638,7 +3647,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, []);
+  }, [disableBeforeUnloadWarning]);
 
   // Handle document change
   const handleDocumentChange = useCallback(
@@ -9767,15 +9776,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                     the Tauri shell owns crash recovery via sidecar files and
                     shows its own restore UI. IndexedDB autosave is also
                     disabled on desktop (see onDesktop guard above). */}
-                  {!(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__
-                    ?.isDesktop && !hideAutosaveRestoreBanner && (
-                    <AutosaveRestoreBanner
-                      onRestore={(buf, name) => {
-                        void loadBuffer(buf);
-                        onDocumentNameChange?.(name);
-                      }}
-                    />
-                  )}
+                  {!(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop &&
+                    !hideAutosaveRestoreBanner && (
+                      <AutosaveRestoreBanner
+                        onRestore={(buf, name) => {
+                          void loadBuffer(buf);
+                          onDocumentNameChange?.(name);
+                        }}
+                      />
+                    )}
 
                   {/* Below-toolbar horizontal row: scroll container + the floating
                     PanelRail. position:relative anchors the rail's absolute
@@ -10399,7 +10408,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                                         wordCompat={wordCompat}
                                         readOnly
                                         extensionManager={extensionManager}
-                                        contentLabel={t('sidebar.versionHistory.previewContentLabel')}
+                                        contentLabel={t(
+                                          'sidebar.versionHistory.previewContentLabel'
+                                        )}
                                         scrollContainerRef={previewScrollRef}
                                       />
                                     ) : (
@@ -10421,7 +10432,11 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
 
                             {/* Floating "add comment" button — appears on right edge of page at selection */}
                             {floatingCommentBtn != null && !isAddingComment && !readOnly && (
-                              <Tooltip content={t('formattingBar.addComment')} side="bottom" delayMs={300}>
+                              <Tooltip
+                                content={t('formattingBar.addComment')}
+                                side="bottom"
+                                delayMs={300}
+                              >
                                 <button
                                   type="button"
                                   data-testid="floating-add-comment-button"
@@ -10984,9 +10999,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                         }
                       })
                       .catch((err) => {
-                        toast.error(
-                          t('toast.refineFailed', { message: (err as Error).message })
-                        );
+                        toast.error(t('toast.refineFailed', { message: (err as Error).message }));
                       })
                       .finally(() => setProposalBusy(false));
                   }}
@@ -11043,7 +11056,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                           error: null,
                         });
                       })
-                      .catch((err) => toast.error(t('toast.aiRequestFailed', { message: (err as Error).message })))
+                      .catch((err) =>
+                        toast.error(t('toast.aiRequestFailed', { message: (err as Error).message }))
+                      )
                       .finally(() => setAskAiBusy(false));
                     return;
                   }
@@ -11388,10 +11403,26 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                   <AboutDialog
                     isOpen={showAbout}
                     onClose={() => setShowAbout(false)}
-                    appName={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? 'Casual Office' : 'Docs'}
-                    sourceUrl={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? 'https://github.com/CasualOffice/docs' : null}
-                    homepageUrl={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? 'https://casualoffice.org/' : null}
-                    logoUrl={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? undefined : '/logo.svg'}
+                    appName={
+                      (window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop
+                        ? 'Casual Office'
+                        : 'Docs'
+                    }
+                    sourceUrl={
+                      (window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop
+                        ? 'https://github.com/CasualOffice/docs'
+                        : null
+                    }
+                    homepageUrl={
+                      (window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop
+                        ? 'https://casualoffice.org/'
+                        : null
+                    }
+                    logoUrl={
+                      (window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop
+                        ? undefined
+                        : '/logo.svg'
+                    }
                   />
                 )}
                 {showKeyboardShortcuts && (

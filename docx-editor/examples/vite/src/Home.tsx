@@ -2,7 +2,14 @@
  * Copyright (c) 2026 Casual Office. All rights reserved.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import {
   CATEGORIES,
   CATEGORY_LABEL_KEYS,
@@ -925,9 +932,22 @@ export function Home({
         <a
           href="/"
           aria-label="Docs home"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: COLORS.ink }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 10,
+            textDecoration: 'none',
+            color: COLORS.ink,
+          }}
         >
-          <img src="/logo.svg" alt="" width={28} height={28} aria-hidden="true" />
+          <img
+            className="docs-brand-icon"
+            src="/logo.svg"
+            alt=""
+            width={28}
+            height={28}
+            aria-hidden="true"
+          />
           <span style={{ fontSize: 17, fontWeight: 600 }}>Docs</span>
         </a>
         <div style={{ ...styles.topRight, gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -936,7 +956,14 @@ export function Home({
               type="button"
               onClick={() => onLocaleChange(locale === 'vi' ? 'en' : 'vi')}
               aria-label={t(locale === 'vi' ? 'app.switchToEnglish' : 'app.switchToVietnamese')}
-              style={{ ...styles.topLink, minWidth: 44, minHeight: 44, background: 'transparent', border: 0, cursor: 'pointer' }}
+              style={{
+                ...styles.topLink,
+                minWidth: 44,
+                minHeight: 44,
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
             >
               {locale === 'vi' ? 'EN' : 'VI'}
             </button>
@@ -946,7 +973,13 @@ export function Home({
               type="button"
               onClick={() => onThemeChange(themeMode === 'dark' ? 'light' : 'dark')}
               aria-label={t(themeMode === 'dark' ? 'app.themeLight' : 'app.themeDark')}
-              style={{ ...styles.topLink, minHeight: 44, background: 'transparent', border: 0, cursor: 'pointer' }}
+              style={{
+                ...styles.topLink,
+                minHeight: 44,
+                background: 'transparent',
+                border: 0,
+                cursor: 'pointer',
+              }}
             >
               {themeMode === 'dark' ? t('app.themeLight') : t('app.themeDark')}
             </button>
@@ -973,12 +1006,6 @@ export function Home({
         }}
       />
 
-      <section style={{ ...styles.hero, ...(isMobile && mobile.hero) }}>
-        <h1 style={{ ...styles.heroTitle, ...(isMobile && mobile.heroTitle) }}>
-          {t('home.workspaceTitle')}
-        </h1>
-      </section>
-
       {personalFileSource && (
         <section
           style={{ ...styles.section, ...(isMobile && mobile.section) }}
@@ -986,18 +1013,29 @@ export function Home({
         >
           <div style={{ ...styles.sectionHead, ...(isMobile && mobile.sectionHead) }}>
             <h2 style={styles.sectionTitle}>{t('home.myFiles')}</h2>
-            <span style={styles.sectionHint}>{t('home.myFilesHint')}</span>
           </div>
           {libraryError && (
             <div role="alert" style={{ color: COLORS.inkMuted, fontSize: 13, marginBottom: 8 }}>
               {t('home.myFilesError')}{' '}
-              <button type="button" onClick={() => void refreshPersonalFiles()} style={{ border: 0, background: 'transparent', textDecoration: 'underline', cursor: 'pointer', color: 'inherit' }}>
+              <button
+                type="button"
+                onClick={() => void refreshPersonalFiles()}
+                style={{
+                  border: 0,
+                  background: 'transparent',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  color: 'inherit',
+                }}
+              >
                 {t('common.retry')}
               </button>
             </div>
           )}
           {libraryLoading ? (
-            <p style={{ fontSize: 13, color: COLORS.inkMuted, margin: 0 }} role="status">{t('home.myFilesLoading')}</p>
+            <p style={{ fontSize: 13, color: COLORS.inkMuted, margin: 0 }} role="status">
+              {t('home.myFilesLoading')}
+            </p>
           ) : personalFiles.length === 0 ? (
             <p style={{ fontSize: 13, color: COLORS.inkMuted, margin: 0 }}>
               {t('home.myFilesEmpty')}
@@ -1005,21 +1043,71 @@ export function Home({
           ) : (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
               {personalFiles.map((f) => (
-                <li key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <li
+                  key={f.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}
+                >
                   {renamingFileId === f.id ? (
                     <form
-                      onSubmit={(event) => { event.preventDefault(); void saveRename(f.id); }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveRename(f.id);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        width: '100%',
+                        minWidth: 0,
+                      }}
                     >
                       <input
                         autoFocus
                         value={renameDraft}
                         onChange={(event) => setRenameDraft(event.target.value)}
                         aria-label={t('home.rename')}
-                        style={{ flex: 1, minWidth: 0, minHeight: 44, border: 0, borderRadius: 12, background: 'var(--color-surface-alt, #f6f6f6)', padding: '8px 12px', color: COLORS.ink, font: 'inherit' }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          minHeight: 44,
+                          border: 0,
+                          borderRadius: 12,
+                          background: 'var(--color-surface-alt, #f6f6f6)',
+                          padding: '8px 12px',
+                          color: COLORS.ink,
+                          font: 'inherit',
+                        }}
                       />
-                      <button type="submit" disabled={busyFileId === f.id} style={{ minHeight: 44, border: 0, borderRadius: 10, padding: '0 12px', background: 'var(--color-hover, #f0f0f0)', color: COLORS.ink, cursor: 'pointer' }}>{t('common.save')}</button>
-                      <button type="button" onClick={() => setRenamingFileId(null)} style={{ minHeight: 44, border: 0, borderRadius: 10, padding: '0 12px', background: 'transparent', color: COLORS.inkMuted, cursor: 'pointer' }}>{t('common.cancel')}</button>
+                      <button
+                        type="submit"
+                        disabled={busyFileId === f.id}
+                        style={{
+                          minHeight: 44,
+                          border: 0,
+                          borderRadius: 10,
+                          padding: '0 12px',
+                          background: 'var(--color-hover, #f0f0f0)',
+                          color: COLORS.ink,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {t('common.save')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRenamingFileId(null)}
+                        style={{
+                          minHeight: 44,
+                          border: 0,
+                          borderRadius: 10,
+                          padding: '0 12px',
+                          background: 'transparent',
+                          color: COLORS.inkMuted,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {t('common.cancel')}
+                      </button>
                     </form>
                   ) : (
                     <>
@@ -1027,14 +1115,73 @@ export function Home({
                         type="button"
                         data-testid={`personal-file-${f.id}`}
                         onClick={() => onOpenPersonalFile?.(f.id, f.name)}
-                        style={{ flex: 1, minWidth: 0, minHeight: 48, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: COLORS.surfaceRaised, border: `1px solid ${COLORS.border}`, borderRadius: 12, cursor: 'pointer', fontSize: 14, color: COLORS.ink }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          minHeight: 48,
+                          textAlign: 'left',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '10px 14px',
+                          background: COLORS.surfaceRaised,
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          fontSize: 14,
+                          color: COLORS.ink,
+                        }}
                       >
-                        <img src="/icons/file-text.svg" alt="" aria-hidden="true" width={18} height={18} style={{ flexShrink: 0 }} />
-                        <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: 12, color: COLORS.inkSubtle, flexShrink: 0 }}>{formatSize(f.size)}</span>
+                        <img
+                          src="/icons/file-text.svg"
+                          alt=""
+                          aria-hidden="true"
+                          width={18}
+                          height={18}
+                          style={{ flexShrink: 0 }}
+                        />
+                        <span
+                          style={{
+                            fontWeight: 500,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {f.name}
+                        </span>
+                        <span
+                          style={{
+                            marginLeft: 'auto',
+                            fontSize: 12,
+                            color: COLORS.inkSubtle,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {formatSize(f.size)}
+                        </span>
                       </button>
-                      <button type="button" aria-label={t('home.rename')} title={t('home.rename')} onClick={() => beginRename(f)} style={{ width: 44, minHeight: 44, border: 0, borderRadius: 10, background: 'transparent', cursor: 'pointer' }}>
-                        <img src="/icons/edit.svg" alt="" aria-hidden="true" width={18} height={18} />
+                      <button
+                        type="button"
+                        aria-label={t('home.rename')}
+                        title={t('home.rename')}
+                        onClick={() => beginRename(f)}
+                        style={{
+                          width: 44,
+                          minHeight: 44,
+                          border: 0,
+                          borderRadius: 10,
+                          background: 'transparent',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <img
+                          src="/icons/edit.svg"
+                          alt=""
+                          aria-hidden="true"
+                          width={18}
+                          height={18}
+                        />
                       </button>
                     </>
                   )}
@@ -1054,11 +1201,7 @@ export function Home({
             <h2 style={styles.sectionTitle}>{t('home.createNew')}</h2>
           </div>
           <div style={{ ...styles.featuredRow, ...(isMobile && mobile.featuredRow) }}>
-            <TemplateCard
-              entry={blankDocument}
-              onSelect={onNewDocument}
-              isMobile={isMobile}
-            />
+            <TemplateCard entry={blankDocument} onSelect={onNewDocument} isMobile={isMobile} />
             <TemplateCard entry={blankMarkdown} onSelect={onSelectTemplate} isMobile={isMobile} />
           </div>
         </section>
@@ -1237,8 +1380,6 @@ export function Home({
         onChange={handleFileChange}
         data-testid="home-file-input"
       />
-
-
     </div>
   );
 }

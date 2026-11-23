@@ -292,3 +292,94 @@ Không phán style direction tournament (UI-Q/Calm đã được owner gọi); k
 - [ ] Owner phê duyệt Access identity, guest host, collab fork, agent scope và production cutover; receipt cập nhật.
 
 **Dừng:** đã cập nhật 2026-11-22 — implement được phép theo Task 1→2→3 sau khi owner chốt OQ1–OQ5 (xem Owner Decisions). Production cutover (Task 4) cùng mọi mutation Cloudflare/DNS/tunnel/`CASUAL_PERSONAL_MODE`/submodule trên production vẫn là human gate riêng chờ owner duyệt; OQ6 (inventory share state) chốt tại cutover.
+
+## Revision 1 — Owner UAT (2026-11-23)
+
+Owner UAT ảnh chụp 5 view và báo 6 vấn đề. Đây là revision bổ sung cho Task 3, không mở spec/release mới. Giữ nguyên UI-Q/Docs direction; scope chỉ sửa đúng feedback dưới đây.
+
+### T5 — Home copy + application mark + status clutter
+
+- **Root cause:** Home vẫn render `home.workspaceTitle` + `home.myFilesHint`; `CollabApp` không truyền `renderLogo` cho `DocxEditor` nên title bar rơi về `DefaultDocIcon` xanh của Casual Editor. Owner và guest render cả save-state `saved`; collab title bar render `PresenceCluster.status` cộng thêm fixed `StatusBadge` (z-index 9999).
+- **Acceptance:** bỏ hẳn Home workspace heading và hint; label đổi chính xác thành “Tài liệu của bạn”. Docs app icon dùng cùng local Tabler `file-text` mark trên Home/title bar/favicon. Ẩn trạng thái “Đã lưu” (vẫn giữ pending/error feedback có nghĩa). Bỏ text status “Trực tiếp” và fixed peer-count badge; avatar stack có thể giữ nếu không che control. Không còn overlay lên action.
+- **Files allowed:** `docx-editor/examples/vite/src/{Home.tsx,App.tsx,share.tsx,styles.css}`, `public/{logo.svg,favicon.svg}`, locale keys nếu còn visible.
+
+### T6 — Rời tài liệu không hỏi lặp
+
+- **Root cause:** `App.handleGoHome` gọi `window.confirm` vô điều kiện; generic `DocxEditor` gắn `beforeunload` mỗi khi `isDirty`, kể cả owner web đã có server autosave và guest đã có shared save.
+- **Acceptance:** trong web Docs, Home/back/reload/tab close/share navigation không hiện native/custom discard confirm. Server `visibilitychange/pagehide` autosave vẫn hoạt động; desktop offline recovery/close guard không đổi.
+- **Files allowed:** `docx-editor/examples/vite/src/App.tsx`, `share.tsx`, `packages/react/src/components/DocxEditor.tsx` (public opt-out prop nếu cần); test tương ứng.
+
+### T7 — Owner Share action
+
+- **Root cause:** `CollabApp` PresenceCluster Share callback chỉ copy `window.location.href` (URL owner không phải guest capability); collab route không mount `ShareDialog`. Fixed `StatusBadge` đồng thời phủ lên top-right controls.
+- **Acceptance:** Share button luôn nhận click; mở cùng quản lý share dialog trên file hiện tại, tạo link guest fragment đúng `docx.quoc.app`, list/revoke hoạt động. Không bao giờ copy owner URL thay capability.
+- **Files allowed:** `docx-editor/examples/vite/src/App.tsx`, `src/collab/Share.tsx`, `packages/react/src/components/PresenceCluster.tsx` chỉ nếu cần callback/disabled seam; integration test.
+
+### T8 — Reload shared DOCX không lỗi seed
+
+- **Root cause:** khi shared commit đổi `room_files.current_etag`, seed lease cũ không còn khớp; `onLoadDocument` loại Redis snapshot cũ và lần reload phải seed lại từ DOCX bền. `/api/share/seed-done` kiểm tra active Hocuspocus Y.Doc ngay một lần; nếu update WS còn đang tới thì trả 409 `seed-update-not-persisted`. Client chỉ retry tối đa 10×200ms (2 giây), không đủ cho update DOCX lớn. Không được coi seed là done nếu fragment chưa được server lưu bền.
+- **Acceptance:** reload một shared file sau commit mở đúng content và không lỗi seed khi update đến trong bounded wait; backend chỉ đánh dấu seed done sau khi fragment hiện diện và snapshot đã lưu; nếu update thật sự không tới, trả lỗi/retry rõ ràng và không báo success. Thêm regression test cho transient persistence (false rồi true) và route/file ETag rollover.
+- **Files allowed:** `collab/src/{share-guest-routes.ts,auth/personal.ts,share-guest-routes.unit.test.ts}`, `docx-editor/examples/vite/src/{App.tsx,collab/collab-session.ts}` và test; không đụng production data/tunnel/env.
+
+### T9 — Title input + Comments rail toggle
+
+- **Root cause:** `TitleBar.DocumentName` focus class áp `focus:ring-2`, tạo viền dày ngoài khi rename. `PanelRail` z-index 30 thấp hơn anchored `UnifiedSidebar` z-index 40; comment card có thể phủ lại nút đóng comments.
+- **Acceptance:** title edit không có viền/ring dày; focus giữ cue neutral dễ thấy. Nút Comments bấm hai lần đóng/mở đúng, kể cả khi document có comment cards; các toggle Outline/History/Format giữ nguyên.
+- **Files allowed:** `packages/react/src/components/{TitleBar.tsx,PanelRail.tsx,UnifiedSidebar.tsx,DocxEditor.tsx}` và targeted UI test.
+
+### Revision verify gate
+
+- Chạy collab tests/typecheck, docs package build, Vite build/typecheck và locale validation; chạy browser QA trên các view/state đã gửi, gồm reload shared DOCX, Share open/copy/revoke, comments open→close và browser leave/reload không popup.
+- Chỉ source local/remote main được cập nhật sau final gate; không restart/deploy production trong revision này nếu owner chưa ra lệnh deploy.
+
+## Revision 2 — Owner UAT visual/share follow-up (2026-11-23)
+
+### T10 — Ribbon + participant circles
+
+- **Root cause:** `FormattingBar` áp `--doc-bg-subtle` thành nền xám trên Docs web; `PresenceCluster` dùng AvatarStack palette + vòng active xanh.
+- **Acceptance:** ribbon trên Docs web màu trắng ở light theme; participant circles nền trắng, viền đen mảnh, chữ tối, không màu palette/green ring. Dark theme giữ nền tối.
+- **Files allowed:** `packages/react/src/components/FormattingBar.tsx`, `packages/react/src/components/PresenceCluster.tsx`, `examples/vite/src/styles.css`, owner/guest renderers.
+
+### T11 — Share action + dialog
+
+- **Root cause:** Share button trước đây là text/secondary control; collab flow copies owner URL hoặc re-saves DOCX qua solo `/files/:id`, trong khi file đã bound room nên backend trả `collab-room-required`. Dialog lỗi trước khi vào ready state nên không có copy link control. Ready state vẫn lộ đoạn giải thích #fragment và thiếu visual check mark sau copy.
+- **Acceptance:** top-right Share là icon-only Tabler action, không border ở rest/hover, accessible label giữ nguyên; click mở dialog quản lý share capability hiện tại. Trong collab room flush shared save, không gọi solo file-save; room binding tồn tại trước khi mint. Dialog bỏ prose giải thích token, có nút copy link; sau clipboard success hiện check icon + trạng thái ngắn rồi hoàn nguyên; list/revoke không đổi.
+- **Files allowed:** `examples/vite/src/{App.tsx,collab/Share.tsx,share.tsx,styles.css,public/icons/**}`, `packages/react/src/components/PresenceCluster.tsx`.
+
+### Revision 2 verify gate
+
+- Browser QA local/staging: white ribbon, monochrome avatars, icon-only Share hit target, dialog ready + copy/check + revoke, no `collab-room-required`; capture desktop and 320px. No production restart/deploy in this revision.
+
+## Revision 3 — Owner UAT visual follow-up (2026-11-23)
+
+### T12 — Header theme control placement (owner decision pending)
+
+- **Root cause:** `TitleBar.ThemeToggleButton` already exists in the header, while the View menu also has theme control. Owner first asked to remove the header toggle, then asked to move it to the right of the participant circles; these requirements conflict.
+- **Acceptance:** do not change this control's presence/order until owner chooses: (A) remove header theme control and keep View menu only, or (B) keep it in header and place participant circles to its left.
+- **Files allowed:** `packages/react/src/components/TitleBar.tsx`, `docx-editor/examples/vite/src/App.tsx`; no other theme behavior changes.
+
+### T13 — Dark icon contrast + Share dialog polish
+
+- **Root cause:** the Docs/share marks are external SVG `<img>` assets; their `currentColor` does not inherit the dark theme text color. The revoke control still has a persistent border; removing explanatory prose leaves insufficient gap between dialog heading and link row.
+- **Acceptance:** in dark theme app and Share icons render white/contrast-aware; revoke control has no border at rest/hover; Share title has clear spacing before link field. Keep copy control's transient check feedback and capability transport unchanged.
+- **Files allowed:** `examples/vite/src/{App.tsx,collab/Share.tsx,share.tsx,styles.css}`, `public/icons/**`.
+
+### Revision 3 verify gate
+
+- Browser QA light/dark desktop + 320px: verify icon contrast, absence of the duplicate header theme toggle, popup spacing, borderless revoke, copy→check→reset, and no regression in Revision 1/2 scenarios. No production restart/deploy in this revision.
+
+### T12 owner decision
+
+Owner chose: remove the header light/dark toggle because the same action remains in View; keep participant circles in their existing position. The conflicting request to swap their order is superseded by this explicit choice.
+
+## Revision 4 — Owner UAT small chrome fixes (2026-11-23)
+
+### T14 — Locale button + status-bar seam
+
+- **Root cause:** the editor-header EN/VI button spreads `styles.button`, which supplies a border; the bottom `StatusBar` uses an inline `borderTop` hairline.
+- **Acceptance:** EN/VI retains its 44px target but has no border at rest/hover; the bottom status footer has no separator line and blends into the workspace surface. Keep its page/word-count content and accessible labels.
+- **Files allowed:** `examples/vite/src/App.tsx`, `examples/vite/src/styles.css`; no behavior changes.
+
+### Revision 4 verify gate
+
+- Browser QA at desktop and mobile width: EN/VI border absent at rest and hover; bottom status bar has no top rule; preserve text labels, clickability, and no overflow. No production deploy.

@@ -59,14 +59,13 @@ export interface PanelRailProps {
 }
 
 // Floating rounded card pinned to the top-right of the canvas area (not
-// edge-docked). Positioned absolutely within the editor's below-toolbar row
-// (which is position:relative), so it overlays the grey desk margin without
-// taking flex space or scrolling with the document.
+// edge-docked). It stays above anchored comment cards so its own close/toggle
+// action remains reachable while a side surface is open.
 const railStyle: CSSProperties = {
   position: 'absolute',
   top: 12,
   right: 12,
-  zIndex: 30,
+  zIndex: 50,
   width: 40,
   display: 'flex',
   flexDirection: 'column',
@@ -193,7 +192,11 @@ export function PanelRail({
       {onToggleHistory && (
         <RailButton
           testId="rail-history"
-          label={historyVisible ? t('commandPalette.hideVersionHistory') : t('sidebar.versionHistory.title')}
+          label={
+            historyVisible
+              ? t('commandPalette.hideVersionHistory')
+              : t('sidebar.versionHistory.title')
+          }
           icon="history"
           active={!!historyVisible}
           onClick={onToggleHistory}
@@ -211,7 +214,11 @@ export function PanelRail({
       {onToggleWriter && (
         <RailButton
           testId="rail-writer"
-          label={writerVisible ? t('panelRail.hideWritingAssistant') : t('dialogs.writingAssistant.panelTitle')}
+          label={
+            writerVisible
+              ? t('panelRail.hideWritingAssistant')
+              : t('dialogs.writingAssistant.panelTitle')
+          }
           // Distinct from DocOps (auto_awesome) — the writing assistant reads as
           // an editing/writing aide, not the same sparkle as document ops.
           icon="edit_note"

@@ -15,7 +15,6 @@ import {
 import { prosemirrorToYXmlFragment } from 'y-prosemirror';
 import { toProseDoc } from '@eigenpal/docx-core/prosemirror/conversion';
 import { useCollab } from './collab/useCollab';
-import { StatusBadge } from './collab/StatusBadge';
 import { ShareDialog } from './collab/Share';
 import { LoadingPanel } from './collab/LoadingPanel';
 import { ErrorPanel } from './collab/ErrorPanel';
@@ -528,7 +527,7 @@ function AppShell({
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(
     () =>
       (typeof window !== 'undefined' && window.__deskApp__?.themeMode) ||
-      (ownerThemeMode ?? 'light'),
+      (ownerThemeMode ?? 'light')
   );
   useEffect(() => {
     if (!isDesktop && ownerThemeMode) setThemeMode(ownerThemeMode);
@@ -738,9 +737,12 @@ function AppShell({
   const fileSource: FileSource | null = useMemo(
     () =>
       authUser
-        ? new PersonalFileSource({ baseUrl: '', user: { id: authUser.id, username: authUser.username } })
+        ? new PersonalFileSource({
+            baseUrl: '',
+            user: { id: authUser.id, username: authUser.username },
+          })
         : null,
-    [authUser],
+    [authUser]
   );
   // Persisted file this tab has open (null = unsaved draft).
   const [fileId, setFileId] = useState<string | null>(() => {
@@ -750,6 +752,16 @@ function AppShell({
     return fromQuery ?? (fromPath && fromPath !== 'new' ? decodeURIComponent(fromPath) : null);
   });
   const [fileEtag, setFileEtag] = useState<string | null>(null);
+  const handleCollabFilePersisted = useCallback((id: string, etag: string) => {
+    setFileId(id);
+    setFileEtag(etag);
+  }, []);
+  const [hasUnsavedDocChanges, setHasUnsavedDocChanges] = useState(false);
+  const autosaveOutcomeRef = useRef<'saved' | 'error' | null>(null);
+  const sharedSaveBeforeLeaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const registerSharedSaveBeforeLeave = useCallback((flush: (() => Promise<boolean>) | null) => {
+    sharedSaveBeforeLeaveRef.current = flush;
+  }, []);
 
   // Collab is only available when the build has a real collab server
   // to talk to. The Pages demo builds with this off because there's no
@@ -971,7 +983,7 @@ function AppShell({
             const roomBody = (await roomRes.json()) as { roomId?: string | null };
             if (roomBody.roomId) {
               window.location.assign(
-                `/?room=${encodeURIComponent(roomBody.roomId)}&file=${encodeURIComponent(fileId)}`,
+                `/?room=${encodeURIComponent(roomBody.roomId)}&file=${encodeURIComponent(fileId)}`
               );
               return;
             }
@@ -990,7 +1002,9 @@ function AppShell({
         if (!legacyForcedEditor) navigate(`/document/${fileId}`);
       } catch (err) {
         if (cancelled || seq !== documentLoadSeqRef.current) return;
-        setStatus(t('app.statusErrorLoadingFile') + (err instanceof Error ? ` — ${err.message}` : ''));
+        setStatus(
+          t('app.statusErrorLoadingFile') + (err instanceof Error ? ` — ${err.message}` : '')
+        );
       }
     })();
     return () => {
@@ -1002,23 +1016,26 @@ function AppShell({
   // Persist a brand-new draft (New/template flow) so later autosave
   // writes hit a stable fileId. Called by the Share dialog AND by the
   // first autosave tick of an untitled doc.
-  const ensurePersisted = useCallback(async (currentBytes?: ArrayBuffer): Promise<string | null> => {
-    if (fileId) return fileId;
-    if (!fileSource || !editorRef.current) return null;
-    try {
-      const agent = editorRef.current.getAgent();
-      if (!agent) return null;
-      const bytes = currentBytes ?? (await agent.toBuffer());
-      const created = await fileSource.save(null, bytes, { name: fileName });
-      setFileId(created.id);
-      setFileEtag(created.etag);
-      if (!legacyForcedEditor) navigate(`/document/${created.id}`);
-      return created.id;
-    } catch (err) {
-      console.error('persist draft failed', err);
-      return null;
-    }
-  }, [fileId, fileSource, fileName, legacyForcedEditor]);
+  const ensurePersisted = useCallback(
+    async (currentBytes?: ArrayBuffer): Promise<string | null> => {
+      if (fileId) return fileId;
+      if (!fileSource || !editorRef.current) return null;
+      try {
+        const agent = editorRef.current.getAgent();
+        if (!agent) return null;
+        const bytes = currentBytes ?? (await agent.toBuffer());
+        const created = await fileSource.save(null, bytes, { name: fileName });
+        setFileId(created.id);
+        setFileEtag(created.etag);
+        if (!legacyForcedEditor) navigate(`/document/${created.id}`);
+        return created.id;
+      } catch (err) {
+        console.error('persist draft failed', err);
+        return null;
+      }
+    },
+    [fileId, fileSource, fileName, legacyForcedEditor]
+  );
 
   // SPEC: server-ack autosave for the persisted personal file.
   // "Saved" only after POST /files/:id returns 200 (If-Match etag
@@ -1030,7 +1047,14 @@ function AppShell({
     editorRef: editorRef as unknown as React.RefObject<AutoSaveEditorRef | null>,
     interval: 30_000,
     initialEtag: fileEtag ?? undefined,
-    onSaved: (_when, etag) => setFileEtag(etag),
+    onSaved: (_when, etag) => {
+      setFileEtag(etag);
+      setHasUnsavedDocChanges(false);
+      autosaveOutcomeRef.current = 'saved';
+    },
+    onError: () => {
+      autosaveOutcomeRef.current = 'error';
+    },
     enabled: Boolean(fileSource && fileId) && !isDesktop,
   });
 
@@ -1275,15 +1299,16 @@ function AppShell({
       if (!fileId) {
         const persistedId = await ensurePersisted(buffer);
         if (persistedId) {
-          setStatus(t('unsaved.saved'));
-          setTimeout(() => setStatus(''), 1500);
+          setStatus('');
           return;
         }
       } else if (fileSource) {
-        const saved = await fileSource.save(fileId, buffer, { etag: fileEtag ?? undefined, name: fileName });
+        const saved = await fileSource.save(fileId, buffer, {
+          etag: fileEtag ?? undefined,
+          name: fileName,
+        });
         setFileEtag(saved.etag);
-        setStatus(t('unsaved.saved'));
-        setTimeout(() => setStatus(''), 1500);
+        setStatus('');
         return;
       }
       // No owner store (dev without personal mode) — legacy download.
@@ -1298,8 +1323,7 @@ function AppShell({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      setStatus(t('app.statusSavedBang'));
-      setTimeout(() => setStatus(''), 2000);
+      setStatus('');
     } catch (err) {
       console.error('save failed', err);
       setStatus(t('app.statusSaveFailed'));
@@ -1525,17 +1549,12 @@ function AppShell({
     console.log('Fonts loaded');
   }, []);
 
-  // Click the title-bar brand logo → confirm + return to the template
-  // gallery. Mirrors the Google Docs / Notion pattern where the home
-  // mark in the corner takes you back. Always confirms because we
-  // can't cheaply tell if the doc is unsaved-dirty without hooking
-  // every PM transaction, and a stray click that discards work is
-  // worse than one extra modal.
-  const handleGoHome = useCallback(() => {
+  // Return to the Home/library immediately. Web Docs autosaves to the
+  // owner file source on edits and flushes again when the page is hidden;
+  // avoid a blocking discard prompt on a routine navigation action.
+  const handleGoHome = useCallback(async () => {
     // Desktop (Casual Office) mode: the editor has no web home to go back to —
-    // the launcher window IS the home screen. So the title-bar logo acts as
-    // "back to launcher": bring that window forward and leave this document
-    // window exactly as it is (no confirm, no navigation, no state reset).
+    // the launcher window IS the home screen.
     if (isDesktop) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1546,8 +1565,42 @@ function AppShell({
       }
       return;
     }
-    const ok = window.confirm(t('app.confirmLeaveDocument'));
-    if (!ok) return;
+
+    try {
+      const flushShared = sharedSaveBeforeLeaveRef.current;
+      if (flushShared) {
+        if (!(await flushShared())) return;
+      } else if (authUser && fileSource) {
+        if (
+          fileId &&
+          (hasUnsavedDocChanges || autosave.status === 'saving' || autosave.pendingError)
+        ) {
+          if (autosave.conflict) {
+            setStatus(t('app.statusSaveFailed'));
+            return;
+          }
+          autosaveOutcomeRef.current = null;
+          await autosave.flush();
+          if (autosaveOutcomeRef.current !== 'saved') {
+            setStatus(t('app.statusSaveFailed'));
+            return;
+          }
+        } else if (!fileId && hasUnsavedDocChanges) {
+          const agent = editorRef.current?.getAgent();
+          const bytes = agent ? await agent.toBuffer() : null;
+          if (!bytes || !(await ensurePersisted(bytes))) {
+            setStatus(t('app.statusSaveFailed'));
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('save before leaving failed', err);
+      setStatus(t('app.statusSaveFailed'));
+      return;
+    }
+
+    setHasUnsavedDocChanges(false);
     setCurrentDocument(null);
     setDocumentBuffer(null);
     setTextDoc(null);
@@ -1556,10 +1609,20 @@ function AppShell({
     setFileId(null);
     setFileEtag(null);
     suppressSeedDocumentRef.current = false;
-    // Drives both the URL and the view; the route effect flips view='home'.
     if (!legacyForcedEditor) navigate('/home');
     setView('home');
-  }, [isDesktop, legacyForcedEditor, t]);
+  }, [
+    isDesktop,
+    legacyForcedEditor,
+    authUser,
+    fileSource,
+    fileId,
+    hasUnsavedDocChanges,
+    autosave,
+    ensurePersisted,
+    editorRef,
+    t,
+  ]);
 
   // Clickable variant of the title-bar logo. Sources the branded
   // `/logo.svg` from the demo's `public/` so the title-bar mark, the
@@ -1605,6 +1668,7 @@ function AppShell({
         data-testid="title-bar-home"
       >
         <img
+          className="docs-brand-icon"
           src="/logo.svg"
           alt=""
           width={32}
@@ -1627,24 +1691,35 @@ function AppShell({
             type="button"
             aria-label={t(locale === 'vi' ? 'app.switchToEnglish' : 'app.switchToVietnamese')}
             onClick={() => onLocaleChange(locale === 'vi' ? 'en' : 'vi')}
-            style={{ ...styles.button, minWidth: 44, minHeight: 44 }}
+            className="docs-locale-button"
+            style={{ ...styles.button, minWidth: 44, minHeight: 44, border: 0, background: 'transparent' }}
           >
             {locale === 'vi' ? 'EN' : 'VI'}
           </button>
         )}
         {/* SPEC: server-ack save state next to Share. */}
-        {!isDesktop && authUser && fileId && <AutosaveStatus state={autosave} />}
+        {!isDesktop && authUser && fileId && <AutosaveStatus state={autosave} showSaved={false} />}
         {/* Collab Share is gated by collabEnabled AND not in desktop
             mode (Casual Office is single-user). Open / Save / New live in
             the File menu, driven by <DocxEditor>'s internal handlers. */}
         {collabEnabled && !isDesktop && (
           <button
             ref={shareTriggerRef}
-            style={{ ...styles.button, background: '#f6f6f6', color: '#111', border: '1px solid #e5e5e5', minHeight: 44, borderRadius: 12 }}
+            type="button"
+            className="docs-share-icon-button"
             aria-label={t('app.share')}
+            title={t('app.share')}
+            data-testid="owner-share-button"
             onClick={() => setShareOpen(true)}
           >
-            {t('app.share')}
+            <img
+              className="docs-share-icon"
+              src="/icons/share.svg"
+              alt=""
+              aria-hidden="true"
+              width={20}
+              height={20}
+            />
           </button>
         )}
         {/* Local-user chip in place of Share when running in Casual
@@ -1693,7 +1768,18 @@ function AppShell({
         {status && <span style={styles.status}>{status}</span>}
       </div>
     ),
-    [status, collabEnabled, isDesktop, deskProfile, authUser, fileId, autosave, locale, onLocaleChange, t]
+    [
+      status,
+      collabEnabled,
+      isDesktop,
+      deskProfile,
+      authUser,
+      fileId,
+      autosave,
+      locale,
+      onLocaleChange,
+      t,
+    ]
   );
 
   // Collab mode is a hard fork: the editor binds to a Y.Doc fed by
@@ -1730,9 +1816,12 @@ function AppShell({
         onError={handleError}
         onFontsLoaded={handleFontsLoaded}
         fileId={fileId}
+        fileEtag={fileEtag}
         fileSource={authUser ? fileSource : null}
         locale={locale}
-        onPersisted={(id) => setFileId(id)}
+        renderLogo={renderLogo}
+        onPersisted={handleCollabFilePersisted}
+        onRegisterBeforeLeave={registerSharedSaveBeforeLeave}
       />
     );
   }
@@ -1754,10 +1843,16 @@ function AppShell({
         onLocaleChange={!isDesktop ? onLocaleChange : undefined}
         themeMode={themeMode === 'dark' ? 'dark' : 'light'}
         onThemeChange={!isDesktop ? onThemeChange : undefined}
-        onLogout={!isDesktop ? async () => {
-          await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined);
-          window.location.assign('/');
-        } : undefined}
+        onLogout={
+          !isDesktop
+            ? async () => {
+                await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(
+                  () => undefined
+                );
+                window.location.assign('/');
+              }
+            : undefined
+        }
       />
     );
   }
@@ -1909,6 +2004,7 @@ function AppShell({
           hideLocalSaveStatus={!isDesktop}
           disableBrowserAutosave={Boolean(authUser)}
           hideAutosaveRestoreBanner={Boolean(authUser)}
+          disableBeforeUnloadWarning={!isDesktop}
           // Stable callbacks — defined as useCallback above so DocxEditor's
           // internal handleSave/handleExport don't re-reference on every status change.
           onSave={
@@ -1937,8 +2033,7 @@ function AppShell({
                         name: fileName,
                       });
                       setFileEtag(saved.etag);
-                      setStatus(t('unsaved.saved'));
-                      setTimeout(() => setStatus(''), 1500);
+                      setStatus('');
                     } catch (err) {
                       console.error('web save failed', err);
                       setStatus(t('app.statusSaveFailed'));
@@ -1951,6 +2046,7 @@ function AppShell({
           // Desktop only: mark the window dirty on every real document change
           // so the unsaved-changes close-guard fires for mouse/toolbar edits.
           onChange={isDesktop ? onDocChangeDesktop : undefined}
+          onDirtyChange={!isDesktop ? setHasUnsavedDocChanges : undefined}
           // Desktop only: unbind the old file path when a file is opened
           // in-window, so a later Save can't overwrite the previous file.
           onFileOpened={isDesktop ? onFileOpenedDesktop : undefined}
@@ -1987,7 +2083,9 @@ function AppShell({
           // The collab route is derived once at app boot; hard navigate
           // with non-secret IDs so it remounts into the room and fetches
           // a fresh in-memory owner token. No capability is in this URL.
-          window.location.assign(`/?room=${encodeURIComponent(roomId)}&file=${encodeURIComponent(fid)}`);
+          window.location.assign(
+            `/?room=${encodeURIComponent(roomId)}&file=${encodeURIComponent(fid)}`
+          );
         }}
         onClose={() => setShareOpen(false)}
       />
@@ -2018,11 +2116,14 @@ interface CollabAppProps {
   onFontsLoaded: () => void;
   /** Owner file binding for this room (null on legacy anonymous rooms). */
   fileId: string | null;
+  fileEtag: string | null;
   fileSource: FileSource | null;
   locale: AppLocale;
-  /** Called after a draft is persisted for the first time (Share of a
-   *  blank doc minted the file). */
-  onPersisted: (id: string) => void;
+  renderLogo: () => React.ReactNode;
+  /** Update the owner library's durable identity after a save or share. */
+  onPersisted: (id: string, etag: string) => void;
+  /** Register a shared-room flush for the Home action without a leave prompt. */
+  onRegisterBeforeLeave: (flush: (() => Promise<boolean>) | null) => void;
 }
 
 type SeedState =
@@ -2062,15 +2163,20 @@ function CollabApp({
   onError,
   onFontsLoaded,
   fileId,
+  fileEtag,
   fileSource,
   locale,
+  renderLogo,
   onPersisted,
+  onRegisterBeforeLeave,
 }: CollabAppProps) {
   const { t } = useTranslation();
+  const [shareOpen, setShareOpen] = useState(false);
+  const canManageShare = Boolean(fileId && fileEtag && fileSource);
 
   // ── Room token (owner) ────────────────────────────────────────────
   const [roomToken, setRoomToken] = useState<string | null>(() =>
-    fileId ? (getCollabToken(fileId)?.token ?? null) : null,
+    fileId ? (getCollabToken(fileId)?.token ?? null) : null
   );
   useEffect(() => {
     if (roomToken || !fileId) return;
@@ -2158,12 +2264,16 @@ function CollabApp({
       // this revision's lease instead of parsing/importing twice.
       if (fragment.length > 0) {
         let cancelled = false;
-        void markSeedDone(collabHttp, roomToken!).then(() => {
-          if (!cancelled) setMountReady(true);
-        }).catch((err) => {
-          if (!cancelled) setSeed({ kind: 'error', message: serializeError(err) });
-        });
-        return () => { cancelled = true; };
+        void markSeedDone(collabHttp, roomToken!)
+          .then(() => {
+            if (!cancelled) setMountReady(true);
+          })
+          .catch((err) => {
+            if (!cancelled) setSeed({ kind: 'error', message: serializeError(err) });
+          });
+        return () => {
+          cancelled = true;
+        };
       }
       // Lease holder: parse + import BEFORE any editor mounts.
       let cancelled = false;
@@ -2175,20 +2285,11 @@ function CollabApp({
             const pmDocument = toProseDoc(document, { styles: document.package.styles });
             prosemirrorToYXmlFragment(pmDocument, fragment);
           }
-          // The server re-checks its live Y.Doc fragment and flushes the
-          // full update before accepting the seed lease as done. Never mark
-          // a lease complete merely because the client downloaded DOCX bytes.
-          let committed = false;
-          for (let retry = 0; retry < 10 && !cancelled; retry++) {
-            try {
-              await markSeedDone(collabHttp, roomToken!);
-              committed = true;
-              break;
-            } catch {
-              await new Promise((resolve) => setTimeout(resolve, 200));
-            }
-          }
-          if (!committed && !cancelled) throw new Error('seed-update-not-persisted');
+          // The server waits a bounded interval for this WS update to arrive,
+          // verifies the live fragment, then flushes the full snapshot before
+          // accepting the seed lease. A real failure stays recoverable through
+          // the ErrorPanel retry instead of hammering the endpoint for 2 sec.
+          await markSeedDone(collabHttp, roomToken!);
           if (!cancelled) setMountReady(true);
         } catch (err) {
           if (!cancelled) {
@@ -2216,30 +2317,58 @@ function CollabApp({
   const lastRevisionRef = useRef<number | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  const runSharedSave = useCallback(async () => {
-    if (!roomToken || !synced || !dirtyRef.current) return;
+  const runSharedSave = useCallback(async (): Promise<boolean> => {
+    if (!dirtyRef.current) return true;
+    if (!roomToken || !synced) return false;
     const agent = editorRef.current?.getAgent();
-    if (!agent) return;
+    if (!agent) return false;
     dirtyRef.current = false;
     setSaveState('saving');
     try {
       const lease = await requestSaveLease(collabHttp, roomToken);
       if (!lease.granted) {
-        // Another peer is the writer this tick — its commit will bump
-        // the revision we poll; skip without marking anything failed.
+        // Another peer owns this commit tick. Keep our dirty bit so the
+        // next interval or explicit leave-flush retries after that commit.
+        dirtyRef.current = true;
         setSaveState('idle');
-        return;
+        return false;
       }
       const bytes = await agent.toBuffer();
-      await commitSave(collabHttp, roomToken, bytes, lease.etag);
+      const committed = await commitSave(collabHttp, roomToken, bytes, lease.etag);
+      if (fileId) onPersisted(fileId, committed.etag);
       lastRevisionRef.current = lease.revision + 1;
       setSaveState('saved');
+      return true;
     } catch (err) {
       dirtyRef.current = true;
       setSaveState('error');
-      if (err instanceof Error && err.name !== 'ShareApiError') console.error('shared save failed', err);
+      if (err instanceof Error && err.name !== 'ShareApiError')
+        console.error('shared save failed', err);
+      return false;
     }
-  }, [roomToken, synced, collabHttp, editorRef]);
+  }, [roomToken, synced, collabHttp, editorRef, fileId, onPersisted]);
+
+  const flushBeforeLeave = useCallback(async () => {
+    // Legacy/dev rooms without an owner file have no durable file host to flush.
+    if (!fileId || !fileSource) return true;
+    const saved = await runSharedSave();
+    if (!saved) setSaveState('error');
+    return saved;
+  }, [fileId, fileSource, runSharedSave]);
+
+  useEffect(() => {
+    onRegisterBeforeLeave(flushBeforeLeave);
+    return () => onRegisterBeforeLeave(null);
+  }, [onRegisterBeforeLeave, flushBeforeLeave]);
+
+  const handleOpenShare = useCallback(async () => {
+    if (!canManageShare) return;
+    if (!(await runSharedSave())) {
+      setSaveState('error');
+      return;
+    }
+    setShareOpen(true);
+  }, [canManageShare, runSharedSave]);
 
   // Save ticks: 6s after each edit burst (cheap debounce loop).
   useEffect(() => {
@@ -2276,9 +2405,12 @@ function CollabApp({
       const trimmed = newName.trim();
       if (!trimmed) return;
       if (fileSource && fileId) {
-        void fileSource.rename(fileId, trimmed).then(() => {
-          metaMap.set('fileName', trimmed);
-        }).catch((err) => onError(new Error(serializeError(err))));
+        void fileSource
+          .rename(fileId, trimmed)
+          .then(() => {
+            metaMap.set('fileName', trimmed);
+          })
+          .catch((err) => onError(new Error(serializeError(err))));
         return;
       }
       if (metaMap.get('fileName') !== trimmed) metaMap.set('fileName', trimmed);
@@ -2296,22 +2428,36 @@ function CollabApp({
         >
           {saveState === 'saving'
             ? t('collab.savingToServer')
-            : saveState === 'saved'
-              ? t('collab.savedToServer')
-              : saveState === 'error'
-                ? t('collab.saveError')
-                : ''}
+            : saveState === 'error'
+              ? t('collab.saveError')
+              : ''}
         </span>
         <PresenceCluster
           peers={peers.map((p) => ({ name: p.name, color: p.color, active: true }))}
-          status={status}
-          onShare={() => {
-            void navigator.clipboard.writeText(window.location.href);
-          }}
+          monochrome
         />
+        {canManageShare && (
+          <button
+            type="button"
+            className="docs-share-icon-button"
+            aria-label={t('app.share')}
+            title={t('app.share')}
+            data-testid="collab-share-button"
+            onClick={() => void handleOpenShare()}
+          >
+            <img
+              className="docs-share-icon"
+              src="/icons/share.svg"
+              alt=""
+              aria-hidden="true"
+              width={20}
+              height={20}
+            />
+          </button>
+        )}
       </div>
     ),
-    [peers, status, saveState, t]
+    [peers, saveState, t, canManageShare, handleOpenShare]
   );
 
   if (seed.kind === 'loading' || (!mountReady && seed.kind !== 'error')) {
@@ -2348,13 +2494,32 @@ function CollabApp({
           documentName={collabFileName ?? 'Untitled.docx'}
           documentNameEditable={Boolean(fileSource)}
           onDocumentNameChange={handleRename}
+          renderLogo={renderLogo}
           renderTitleBarRight={renderTitleBarRight}
+          disableBeforeUnloadWarning
           onChange={() => {
             dirtyRef.current = true;
           }}
         />
       </main>
-      <StatusBadge status={status} peers={peers} />
+      {fileId && fileSource && (
+        <ShareDialog
+          open={shareOpen}
+          fileId={fileId}
+          fileEtag={fileEtag}
+          fileName={collabFileName ?? 'Untitled.docx'}
+          collabHttp={collabHttp}
+          skipCurrentFileSave
+          serializeDoc={async () => {
+            const agent = editorRef.current?.getAgent();
+            if (!agent) throw new Error('editor not ready');
+            return agent.toBuffer();
+          }}
+          onPersisted={onPersisted}
+          onJoinedRoom={() => setShareOpen(false)}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   );
 }
