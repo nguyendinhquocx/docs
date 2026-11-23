@@ -1,3 +1,16 @@
+---
+artifact_type: "completed-spec"
+spec_id: "SPEC-2026-11-22-docs-personal-workspace"
+status: "archived"
+title: "Docs personal workspace and share collaboration"
+archived_at: "2026-11-23T19:46:16+07:00"
+source_file: "SPEC-2026-11-22-docs-personal-workspace.md"
+source_sha256: "3718a1fc8bc1836c09854385f84319a9067baedd32c4d19759b9a14e2b640673"
+implementation_ref: "d6008b021c250c7b0fc9026ce4653e58e7347bc6"
+working_tree: "dirty"
+related_paths: ["docx-editor/examples/vite/src", "collab/src", "deploy"]
+---
+
 # Spec: Docs personal workspace and share collaboration
 
 > **Trạng thái:** APPROVED TO IMPLEMENT — owner đã review và chốt OQ1–OQ5 ngày 2026-11-22 (xem Owner Decisions bên dưới). Implement theo Task 1→2→3→4; production cutover (Task 4) vẫn là human gate riêng.
@@ -383,3 +396,9 @@ Owner chose: remove the header light/dark toggle because the same action remains
 ### Revision 4 verify gate
 
 - Browser QA at desktop and mobile width: EN/VI border absent at rest and hover; bottom status bar has no top rule; preserve text labels, clickability, and no overflow. No production deploy.
+
+## Closure (2026-11-23)
+
+- Revisions 1–4 verified on local Docker UAT r4 (light/dark, desktop + 320px); final gate green (typecheck, vite tests 5, collab 178).
+- Owner ordered production deploy: image `288d1115…` live, data preserved, rollback tagged; receipt `deploy/receipts/deploy-uat-r4-2026-11-23.md`.
+- Owner confirmed UAT pass on production. Remaining observability-only notes: Access IdP method/session duration not independently audited; full restore rehearsal still never performed.
