@@ -22,7 +22,7 @@ Production image is live on ProDesk. Owner host remains behind Cloudflare Access
 
 ## Deploy and rollback identity
 
-- Source on ProDesk: root repo `5b362e5` (all implementation commits through `5b362e52`); collab submodule `b83006b` from the private mirror `nguyendinhquocx/collab`, fetched using its dedicated read-only deploy key.
+- Image was built from the ProDesk source state root `5b362e52` plus collab submodule `b83006b` from the private mirror `nguyendinhquocx/collab`, fetched using its dedicated read-only deploy key. ProDesk checkout later fast-forwarded docs/receipt-only commits to root `a89a591c`; no application code changed and no rebuild was needed.
 - Candidate/active image ID: `sha256:88d3a2062a982cf56109373fb32f03e13ec73024ee3e388179c72504523fdde7`.
 - Rollback image ID preserved from backup and tagged `casual-editor:rollback-20261122`: `sha256:4cf2d9656685267660d2225d4ff1e4a886d9b7d21483272be93ed573a5c9bd67`.
 - Active compose: `/home/quoc/apps/docs.quoc.app/deploy/docker-compose.selfhost.yml`.
