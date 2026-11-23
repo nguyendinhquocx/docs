@@ -5,7 +5,7 @@ Production docs.quoc.app trên ProDesk CHƯA bị restart — vẫn chạy bản
 ## Đã làm
 1. **Backup (PASS, off-host):** ProDesk `/home/quoc/apps/docs.quoc.app/backups/cutover-20261122T0440/`
    (redis-dump.rdb sau SAVE, data-collab.tar.gz, deploy-config.tar.gz, rollback-image.txt =
-   sha256:4cf2d965…, SHA256SUMS) + bản copy laptop `D:/pcloud/workspace/archive\docs-quoc-app-cutover-20261122\`,
+   sha256:4cf2d965…, SHA256SUMS) + bản copy laptop `D:/pcloud/workspace/archive/docs-quoc-app-cutover-20261122/`,
    `sha256sum -c` OK ở cả hai nơi.
 2. **Code sync (PASS):** laptop push `4672d46f..5b362e52` → `origin/docs`; ProDesk
    `/home/quoc/apps/docs.quoc.app` pull ff → `5b362e5`; submodule `collab` trỏ mirror
