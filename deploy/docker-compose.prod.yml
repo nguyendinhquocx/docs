@@ -47,7 +47,7 @@ services:
       CF_ACCESS_TEAM: "${CF_ACCESS_TEAM:?set in deploy/.env}"
       CF_ACCESS_AUD: "${CF_ACCESS_AUD:?set in deploy/.env}"
       CF_ACCESS_IDENTITIES: "${CF_ACCESS_IDENTITIES:?set in deploy/.env}"
-      COLLAB_ROOM_TOKEN_SECRET: "${COLLAB_ROOM_TOKEN_SECRET:?set in deploy/.env}"]
+      COLLAB_ROOM_TOKEN_SECRET: "${COLLAB_ROOM_TOKEN_SECRET:?set in deploy/.env}"
     volumes:
       - ./data/collab:/data
     expose:
