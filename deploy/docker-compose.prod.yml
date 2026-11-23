@@ -35,6 +35,19 @@ services:
       # restart. Without it the server would (now) refuse to start in prod.
       REDIS_URL: "redis://redis:6379"
       CASUAL_REDIS_PREFIX: "casual-docs:room:"
+      # Personal workspace (SPEC-2026-11-22): owner-only login + durable files.
+      CASUAL_PERSONAL_MODE: "single"
+      CASUAL_SESSION_TTL_DAYS: "45"
+      # Host boundary: docs.quoc.app = owner (Cloudflare Access), docx.quoc.app
+      # = guest capability links. Secrets/keys come from deploy/.env on the
+      # host — never committed. The server REFUSES to boot if CF_OWNER_HOST
+      # is set but the rest are missing, so fill .env completely first.
+      CF_OWNER_HOST: "${CF_OWNER_HOST:-docs.quoc.app}"
+      CF_GUEST_HOST: "${CF_GUEST_HOST:?set CF_GUEST_HOST=docx.quoc.app in deploy/.env}"
+      CF_ACCESS_TEAM: "${CF_ACCESS_TEAM:?set in deploy/.env}"
+      CF_ACCESS_AUD: "${CF_ACCESS_AUD:?set in deploy/.env}"
+      CF_ACCESS_IDENTITIES: "${CF_ACCESS_IDENTITIES:?set in deploy/.env}"
+      COLLAB_ROOM_TOKEN_SECRET: "${COLLAB_ROOM_TOKEN_SECRET:?set in deploy/.env}"]
     volumes:
       - ./data/collab:/data
     expose:
