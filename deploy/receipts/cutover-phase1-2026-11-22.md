@@ -17,9 +17,10 @@ Production docs.quoc.app trên ProDesk CHƯA bị restart — vẫn chạy bản
 4. **Image build + smoke (PASS):** `casual-editor:docs-quoc-app-candidate` build trên ProDesk;
    container test chứng minh refuse-boot khi thiếu CF_* (exit 1, message đủ env) và
    `/health` = 200 khi boot bình thường. Production container chưa bị đụng.
-5. **`.env` khung trên ProDesk** `deploy/.env` chmod 600: `COLLAB_ROOM_TOKEN_SECRET`
-   (đã sinh openssl rand -hex 32, không hiện log), `CF_GUEST_HOST=docx.quoc.app`,
-   `CF_ACCESS_IDENTITIES=quocnguyent10@gmail.com`; `CF_ACCESS_TEAM`, `CF_ACCESS_AUD` chờ owner.
+5. **`.env` khung ban đầu trên ProDesk** `deploy/.env` chmod 600: `COLLAB_ROOM_TOKEN_SECRET`
+   (đã sinh openssl rand -hex 32, không hiện log), `CF_GUEST_HOST=docx.quoc.app`.
+   Identity và Access IDs đã được bổ sung/correct ở phase 2; email cuối cùng do owner xác nhận là
+   `quocnguyent10v@gmail.com` (xem `cutover-phase2-2026-11-23.md`).
 
 ## OQ6 inventory (legacy share rows): KHÔNG có dữ liệu cần migrate
 - `data/collab/` rỗng (0 file) — chưa từng có file DOCX persistent nào.
@@ -27,7 +28,9 @@ Production docs.quoc.app trên ProDesk CHƯA bị restart — vẫn chạy bản
 - Share registry bản cũ nằm **in-memory** (receipt 2026-11-22: mất sau restart) → không có row persistent.
 - Redis: 5 key `casual-docs:room:*` là Y.Doc snapshot test/synthetic, đã backup; giữ nguyên, app mới không đọc.
 
-## Giai đoạn 2 — chờ owner Cloudflare (blocker duy nhất còn lại)
+## Giai đoạn 2 — trạng thái lúc ghi receipt này (đã được giải quyết; xem phase 2)
+
+Các bước bên dưới là kế hoạch tại thời điểm phase 1, không còn là blocker hiện tại.
 1. Tạo Access application bảo vệ `docs.quoc.app` (policy: email `quocnguyent10@gmail.com`).
 2. Lấy **team domain** (`<team>.cloudflareaccess.com`) và **AUD tag** từ Access app.
 3. Thêm public hostname `docx.quoc.app` → `http://127.0.0.1:8080` vào tunnel `cloudflared-docs`
