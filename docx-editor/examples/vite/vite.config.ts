@@ -10,6 +10,8 @@ import path from 'path';
 import { copyFileSync, existsSync } from 'fs';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
+const collabApiTarget = process.env.VITE_COLLAB_API_TARGET ?? 'http://127.0.0.1:8090';
+const collabWsTarget = collabApiTarget.replace(/^http/, 'ws');
 
 // GitHub Pages has no SPA rewrite: a hard refresh on a deep client route
 // (e.g. /document/<id>) hits Pages' own 404 because there's no file there.
@@ -159,9 +161,25 @@ export default defineConfig(async () => {
     server: {
       port: 5173,
       open: false,
+      // Local owner/guest smoke: Vite serves the two UI shells while the
+      // isolated collab server owns API + WSS. Production remains same-origin
+      // inside Fastify and never uses this proxy configuration.
+      proxy: {
+        '/auth': { target: collabApiTarget, changeOrigin: true },
+        '/files': { target: collabApiTarget, changeOrigin: true },
+        '/api': { target: collabApiTarget, changeOrigin: true },
+        '/wopi': { target: collabApiTarget, changeOrigin: true },
+        '/yjs': { target: collabWsTarget, ws: true, changeOrigin: true },
+      },
     },
     build: {
       outDir: 'dist',
+      rollupOptions: {
+        input: {
+          owner: path.resolve(__dirname, 'index.html'),
+          guest: path.resolve(__dirname, 'share.html'),
+        },
+      },
     },
   };
 });

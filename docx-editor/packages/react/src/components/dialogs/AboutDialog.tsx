@@ -13,6 +13,7 @@
 import type { CSSProperties } from 'react';
 import { Dialog } from '../ui/Dialog';
 import { openExternal } from '../../utils/openExternal';
+import { useTranslation } from '../../i18n';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const APP_VERSION: string = (globalThis as any).__APP_VERSION__ ?? 'dev';
@@ -20,12 +21,14 @@ const APP_VERSION: string = (globalThis as any).__APP_VERSION__ ?? 'dev';
 export interface AboutDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Optional override — defaults to "Casual Editor". */
+  /** Product name shown in the dialog. */
   appName?: string;
-  /** Optional override — defaults to the project GitHub repo. */
-  sourceUrl?: string;
-  /** Optional override — defaults to the live demo. */
-  homepageUrl?: string;
+  /** Optional source link, used only by the separate desktop build. */
+  sourceUrl?: string | null;
+  /** Optional homepage link, used only by the separate desktop build. */
+  homepageUrl?: string | null;
+  /** Optional local app mark; web workspace passes the Tabler file-text SVG. */
+  logoUrl?: string;
 }
 
 const bodyStyle: CSSProperties = {
@@ -138,16 +141,18 @@ function CasualEditorLogo({ size = 56 }: { size?: number }) {
 export function AboutDialog({
   isOpen,
   onClose,
-  appName = 'Casual Editor',
-  sourceUrl = 'https://github.com/CasualOffice/docs',
-  homepageUrl = 'https://docs.casualoffice.org/',
+  appName = 'Docs',
+  sourceUrl = null,
+  homepageUrl = null,
+  logoUrl,
 }: AboutDialogProps) {
+  const { t } = useTranslation();
   const year = new Date().getFullYear();
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
-      title={`About ${appName}`}
+      title={t('about.title', { name: appName })}
       testId="about-dialog"
       width={520}
       footer={
@@ -158,13 +163,11 @@ export function AboutDialog({
     >
       <div style={bodyStyle}>
         <div style={logoWrap}>
-          <CasualEditorLogo />
+          {logoUrl ? <img src={logoUrl} alt="" width={40} height={40} aria-hidden="true" /> : <CasualEditorLogo size={40} />}
         </div>
         <h3 style={productTitleStyle}>{appName}</h3>
-        <p style={taglineStyle}>
-          A casual, real-time collaborative <code>.docx</code> editor.
-          <br />
-          Open it.{' '}
+        <p style={taglineStyle}>{t('about.description')}</p>
+        {homepageUrl && (
           <a
             href={homepageUrl}
             onClick={(e) => {
@@ -173,47 +176,37 @@ export function AboutDialog({
             }}
             style={linkStyle}
           >
-            Try the live demo
+            {t('about.homepageLink')}
           </a>
-          .
-        </p>
+        )}
         <dl style={factsStyle}>
-          <dt style={dtStyle}>Version</dt>
+          <dt style={dtStyle}>{t('about.version')}</dt>
           <dd style={ddStyle} data-testid="about-version">
             {APP_VERSION}
           </dd>
-          <dt style={dtStyle}>Source</dt>
-          <dd style={ddStyle}>
-            <a
-              href={sourceUrl}
-              onClick={(e) => {
-                e.preventDefault();
-                void openExternal(sourceUrl);
-              }}
-              style={linkStyle}
-            >
-              {sourceUrl.replace(/^https?:\/\//, '')}
-            </a>
-          </dd>
-          <dt style={dtStyle}>Engine</dt>
-          <dd style={ddStyle}>
-            Built on{' '}
-            <a
-              href="https://github.com/eigenpal/docx-editor"
-              onClick={(e) => {
-                e.preventDefault();
-                void openExternal('https://github.com/eigenpal/docx-editor');
-              }}
-              style={linkStyle}
-            >
-              eigenpal/docx-editor
-            </a>{' '}
-            (MIT)
-          </dd>
-          <dt style={dtStyle}>License</dt>
+          {sourceUrl && (
+            <>
+              <dt style={dtStyle}>{t('about.source')}</dt>
+              <dd style={ddStyle}>
+                <a
+                  href={sourceUrl}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void openExternal(sourceUrl);
+                  }}
+                  style={linkStyle}
+                >
+                  {sourceUrl.replace(/^https?:\/\//, '')}
+                </a>
+              </dd>
+            </>
+          )}
+          <dt style={dtStyle}>{t('about.engine')}</dt>
+          <dd style={ddStyle}>{t('about.engineValue')}</dd>
+          <dt style={dtStyle}>{t('about.license')}</dt>
           <dd style={ddStyle}>Apache-2.0</dd>
         </dl>
-        <p style={copyrightStyle}>© {year} Casual Office. Released under the Apache-2.0 license.</p>
+        <p style={copyrightStyle}>{t('about.localWorkspace', { year })}</p>
       </div>
     </Dialog>
   );

@@ -93,7 +93,7 @@
     "shapeRectangle": "Retângulo",
     "showOutline": "Mostrar estrutura do documento",
     "versionHistory": "Histórico de versões",
-    "aboutCasualEditor": "Sobre o Casual Editor",
+    "aboutCasualEditor": "Sobre o Docs",
     "callout": "Texto explicativo",
     "clearFormatting": "Limpar formatação",
     "copy": "Copiar",
@@ -129,7 +129,19 @@
     "characterSpacingExpanded1": "Expandido (+1pt)",
     "characterSpacingExpanded2": "Expandido (+2pt)",
     "characterSpacingCondensed1": "Condensado (−1pt)",
-    "characterSpacingCondensed2": "Condensado (−2pt)"
+    "characterSpacingCondensed2": "Condensado (−2pt)",
+    "voiceTyping": "Voice typing",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "smallCaps": "Small Caps",
+    "allCaps": "All Caps",
+    "showRuler": "Show ruler",
+    "verticalRuler": "Vertical ruler",
+    "spellCheck": "Spell check",
+    "grammarCheck": "Grammar check",
+    "aboutDocs": "About Docs"
   },
   "formattingBar": {
     "groups": {
@@ -1064,7 +1076,11 @@
     "menuBarAriaLabel": "Barra de menu",
     "allChangesSaved": "Todas as alterações salvas",
     "saving": "Salvando…",
-    "unsavedChanges": "Alterações não salvas"
+    "unsavedChanges": "Alterações não salvas",
+    "themeSystem": "Match system theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "switchTheme": "Change theme from {current} to {next}"
   },
   "errors": {
     "loadingDocument": "Carregando documento...",
@@ -1695,7 +1711,7 @@
     "selectSize": "Selecione o tamanho"
   },
   "auth": {
-    "signInHeading": "Entrar no Casual Editor",
+    "signInHeading": "Entrar no Docs",
     "username": "Usuário",
     "password": "Senha",
     "signingIn": "Entrando…",
@@ -1792,7 +1808,14 @@
     "justNow": "agora mesmo",
     "minutesAgo": "há {n} min",
     "hoursAgo": "há {n} h",
-    "daysAgo": "{n, plural, one {há # dia} other {há # dias}}"
+    "daysAgo": "{n, plural, one {há # dia} other {há # dias}}",
+    "myFiles": "My files",
+    "myFilesHint": "Stored on your server — survives refresh and restarts",
+    "myFilesEmpty": "No saved documents yet. Create one or import a .docx.",
+    "workspaceTitle": "Your documents",
+    "rename": null,
+    "myFilesError": null,
+    "myFilesLoading": null
   },
   "app": {
     "statusLoadingTemplate": "Carregando modelo…",
@@ -1817,7 +1840,12 @@
     "fileLeftUnchanged": "O arquivo não foi alterado — nada foi salvo sobre ele.",
     "restoreUnsavedChanges": "Este documento tinha alterações não salvas de uma sessão anterior. Restaurar?",
     "restore": "Restaurar",
-    "discard": "Descartar"
+    "discard": "Descartar",
+    "signOut": "Sign out",
+    "switchToEnglish": "Switch language to English",
+    "switchToVietnamese": "Chuyển ngôn ngữ sang tiếng Việt",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme"
   },
   "collab": {
     "shareTitle": "Compartilhar para colaboração",
@@ -1838,7 +1866,16 @@
     "connecting": "Conectando",
     "live": "Ao vivo",
     "disconnected": "Desconectado",
-    "otherEditorCount": "{count, plural, one {# outro editor} other {# outros}}"
+    "otherEditorCount": "{count, plural, one {# outro editor} other {# outros}}",
+    "shareDescriptionV2": "Anyone with this link can edit this document. The link carries a private key in the #fragment — it never reaches servers, logs, or referrers.",
+    "shareLinkAria": "Share link with embedded capability",
+    "shareFragmentNote": "Guests open this link on the share host — no account needed, they see only this document.",
+    "existingLinks": "Existing links",
+    "expiresOn": "expires {date}",
+    "revokeLink": "Revoke",
+    "savingToServer": "Saving…",
+    "savedToServer": "Saved",
+    "saveError": "Save failed — retrying"
   },
   "viewers": {
     "returnToHome": "Voltar para o início",
@@ -1850,5 +1887,27 @@
     "headerBcc": "Cco",
     "headerReplyTo": "Responder a",
     "headerDate": "Data"
+  },
+  "shareview": {
+    "documentTitle": "{name} — Docs",
+    "loading": "Loading shared document…",
+    "invalidLinkTitle": "This link is not valid",
+    "invalidLinkBody": "The share link is wrong, expired, or revoked. Ask the owner for a new link.",
+    "revokedTitle": "This link was revoked",
+    "revokedBody": "Access was removed by the document owner. Your tab can no longer read or edit this document.",
+    "connecting": "Connecting to the shared room…",
+    "readOnlyNotice": "You have view-only access.",
+    "editNotice": "You can edit this document together with everyone in the room."
+  },
+  "about": {
+    "title": "About {name}",
+    "description": "Private DOCX workspace",
+    "homepageLink": "Open workspace",
+    "version": "Version",
+    "source": "Source",
+    "engine": "Engine",
+    "engineValue": "ProseMirror + Yjs",
+    "license": "License",
+    "localWorkspace": "Private workspace · {year}"
   }
 }

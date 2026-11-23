@@ -1,0 +1,60 @@
+name: docs-quoc-app-staging
+
+# Isolated local staging only. This file is standalone: do not overlay it
+# with docker-compose.selfhost.yml and never run it from a ProDesk production
+# clone. Port and both persistent stores are intentionally disjoint from prod.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: docs-quoc-app:staging
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      HOST: "0.0.0.0"
+      CASUAL_FILE_EXT: ".docx"
+      CASUAL_STORAGE: "local"
+      CASUAL_LOCAL_PATH: "/data"
+      CASUAL_PERSONAL_MODE: "single"
+      CASUAL_SESSION_TTL_DAYS: "45"
+      REDIS_URL: "redis://redis:6379"
+      CASUAL_REDIS_PREFIX: "docs-quoc-app-staging:room:"
+      # This staging instance is loopback-only. Production Access/JWKS,
+      # owner identity, and signing-key values are deliberately NOT copied
+      # into a fixture compose file; do not expose this port publicly.
+    volumes:
+      - ../data/staging/collab:/data
+    ports:
+      - "127.0.0.1:18080:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    volumes:
+      - docs-quoc-app-staging-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  docs-quoc-app-staging-redis-data:

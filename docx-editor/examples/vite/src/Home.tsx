@@ -2,7 +2,7 @@
  * Copyright (c) 2026 Casual Office. All rights reserved.
  */
 
-import React, { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   CATEGORIES,
   CATEGORY_LABEL_KEYS,
@@ -16,6 +16,8 @@ import {
   formatSize,
   listRecentFiles,
   useTranslation,
+  type FileEntry,
+  type FileSource,
   type RecentFile,
   type TranslationKey,
 } from '@casualoffice/docs';
@@ -40,6 +42,15 @@ interface HomeProps {
   onNewDocument: () => void;
   onSelectTemplate: (entry: TemplateEntry) => void;
   onOpenFile: (file: File) => void;
+  /** SPEC-2026-11-22: owner server-side file library (PersonalFileSource).
+   *  Null when there is no owner session (dev without personal mode). */
+  personalFileSource?: FileSource | null;
+  onOpenPersonalFile?: (id: string, name: string) => void;
+  onLogout?: () => void;
+  locale?: 'vi' | 'en';
+  onLocaleChange?: (locale: 'vi' | 'en') => void;
+  themeMode?: 'light' | 'dark';
+  onThemeChange?: (theme: 'light' | 'dark') => void;
 }
 
 type CategoryFilter = 'All' | TemplateCategory;
@@ -59,42 +70,26 @@ function categoryLabelKey(c: CategoryFilter): TranslationKey {
 // literal hex after each comma is the light-mode fallback (byte-identical
 // to the pre-dark-mode palette) in case the tokens aren't present.
 const COLORS = {
-  ink: 'var(--color-text, #0b0e15)',
-  inkMuted: 'var(--color-text-secondary, #3b4354)',
-  inkSubtle: 'var(--color-text-muted, #8b93a3)',
-  // Fixed near-black — the "Open file" button and the active category pill
-  // are solid dark chips with white text in BOTH themes. They must not
-  // track body-text color, which flips to near-white in dark mode and would
-  // make these chips illegible.
-  inkSolid: '#0b0e15',
-  // Real document previews (template cards, the blank-card icon tile) stay
-  // literal white "paper" in both themes — matching how the editor's own
-  // page canvas stays light even in dark mode.
+  ink: 'var(--color-text, #111111)',
+  inkMuted: 'var(--color-text-secondary, #666666)',
+  inkSubtle: 'var(--color-text-muted, #999999)',
+  inkSolid: 'var(--color-surface-raised, #ffffff)',
   paper: '#ffffff',
-  // An elevated UI-control surface (search box, filter pills, recent-file
-  // rows, the auto-reopen banner) — white in light mode (unchanged), a
-  // raised dark panel in dark mode.
   surfaceRaised: 'var(--color-surface-raised, #ffffff)',
-  surface: 'var(--color-surface-strip, #f6f8fc)',
-  surface2: 'var(--color-surface-alt, #eef2f8)',
-  border: 'var(--color-divider, #e3e8f1)',
-  borderHover: 'var(--color-border-strong, #9aa1b0)',
-  brand: 'var(--color-accent, #2f56ff)',
-  brandHover: 'var(--color-accent-hover, #2647d6)',
-  brandSoft: 'var(--color-accent-soft, #e9edff)',
-  // Fixed brand blue — keeps >=4.5:1 contrast with white text in both
-  // themes. Used for the one "Reopen" CTA chip; the theme accent itself
-  // lightens in dark mode and would fail contrast with white text there.
-  ctaSolid: '#1d4ed8',
+  surface: 'var(--color-surface, #ffffff)',
+  surface2: 'var(--color-surface-alt, #f6f6f6)',
+  border: 'var(--color-divider, #e5e5e5)',
+  borderHover: 'var(--color-border-strong, #cccccc)',
+  brand: 'var(--color-accent, #111111)',
+  brandHover: 'var(--color-hover, #f0f0f0)',
+  brandSoft: 'var(--color-accent-soft, #f6f6f6)',
+  ctaSolid: 'var(--color-hover, #f0f0f0)',
 };
 
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background:
-      'radial-gradient(1100px 700px at 8% -10%, rgba(110,139,255,0.35) 0%, transparent 55%),' +
-      'radial-gradient(900px 500px at 100% 0%, rgba(167,139,250,0.28) 0%, transparent 50%),' +
-      `linear-gradient(180deg, ${COLORS.surface} 0%, ${COLORS.surface2} 100%)`,
+    background: COLORS.surface,
     boxSizing: 'border-box',
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -151,9 +146,9 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: '14px',
   },
   heroTitle: {
-    fontSize: '40px',
-    fontWeight: 700,
-    letterSpacing: '-0.025em',
+    fontSize: '24px',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
     lineHeight: 1.1,
     color: COLORS.ink,
     margin: 0,
@@ -178,6 +173,7 @@ const styles: Record<string, CSSProperties> = {
   searchWrap: {
     display: 'flex',
     alignItems: 'center',
+    minHeight: 44,
     gap: '8px',
     background: COLORS.surfaceRaised,
     border: `1px solid ${COLORS.border}`,
@@ -201,13 +197,14 @@ const styles: Record<string, CSSProperties> = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    background: COLORS.inkSolid,
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: '10px',
+    background: COLORS.surfaceRaised,
+    color: COLORS.ink,
+    border: `1px solid ${COLORS.border}`,
+    borderRadius: '12px',
+    minHeight: 44,
     padding: '10px 16px',
     fontSize: '14px',
-    fontWeight: 600,
+    fontWeight: 500,
     cursor: 'pointer',
     transition: 'background 0.15s',
     font: 'inherit',
@@ -219,6 +216,7 @@ const styles: Record<string, CSSProperties> = {
     marginLeft: 'auto',
   },
   pill: {
+    minHeight: 44,
     fontSize: '13px',
     fontWeight: 500,
     color: COLORS.inkMuted,
@@ -231,9 +229,10 @@ const styles: Record<string, CSSProperties> = {
     font: 'inherit',
   },
   pillActive: {
-    background: COLORS.inkSolid,
-    color: '#ffffff',
-    borderColor: COLORS.inkSolid,
+    background: 'var(--color-hover, #f0f0f0)',
+    color: COLORS.ink,
+    borderColor: 'transparent',
+    fontWeight: 600,
   },
 
   section: {
@@ -290,7 +289,7 @@ const styles: Record<string, CSSProperties> = {
     position: 'relative',
   },
   cardHover: {
-    borderColor: '#cbd5e1',
+    borderColor: COLORS.borderHover,
     boxShadow: '0 14px 28px -16px rgba(15, 23, 42, 0.18), 0 4px 8px -2px rgba(15, 23, 42, 0.06)',
     transform: 'translateY(-3px)',
   },
@@ -312,9 +311,8 @@ const styles: Record<string, CSSProperties> = {
   cardThumbHover: {
     transform: 'scale(1.025)',
   },
-  // Blank templates have no photographic render — a landscape SVG cover-cropped
-  // into the portrait frame just showed flat grey and read as a broken image.
-  // Render a real empty-state instead: the entry's own glyph in a dashed tile.
+  // Blank templates have no document preview, so use the local Tabler file-plus
+  // icon instead of a ligature that could render as raw icon-name text.
   cardThumbEmpty: {
     width: '100%',
     height: '100%',
@@ -476,12 +474,7 @@ function TemplateCard({
         {isBlank ? (
           <div style={styles.cardThumbEmpty}>
             <span style={styles.cardThumbEmptyIcon} aria-hidden="true">
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: isMobile ? 28 : 34 }}
-              >
-                {entry.icon}
-              </span>
+              <img src="/icons/file-plus.svg" alt="" width={34} height={34} />
             </span>
           </div>
         ) : (
@@ -498,9 +491,7 @@ function TemplateCard({
               style={{ ...styles.cardIconBadge, ...(isMobile && mobile.cardIconBadge) }}
               aria-hidden="true"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: isMobile ? 14 : 16 }}>
-                {entry.icon}
-              </span>
+              <img src="/icons/file-text.svg" alt="" width={16} height={16} />
             </span>
           </>
         )}
@@ -621,11 +612,12 @@ const autoReopenBannerStyle: React.CSSProperties = {
 };
 
 const autoReopenBannerOpenStyle: React.CSSProperties = {
+  minHeight: 44,
   padding: '6px 14px',
-  borderRadius: 6,
-  border: '1px solid transparent',
-  background: COLORS.ctaSolid,
-  color: '#fff',
+  borderRadius: 12,
+  border: `1px solid ${COLORS.border}`,
+  background: COLORS.surfaceRaised,
+  color: COLORS.ink,
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
@@ -667,7 +659,7 @@ const recentCardStyle: CSSProperties = {
 };
 
 const recentCardHoverStyle: CSSProperties = {
-  borderColor: '#cbd5e1',
+  borderColor: COLORS.borderHover,
   boxShadow: '0 8px 18px -12px rgba(15, 23, 42, 0.16), 0 2px 4px -1px rgba(15, 23, 42, 0.05)',
   transform: 'translateY(-1px)',
 };
@@ -734,10 +726,8 @@ function RecentCard({
         data-testid={`recent-card-${entry.id}`}
         aria-label={t('home.reopenDocumentAria', { name: entry.name })}
       >
-        <div style={recentIconBoxStyle}>
-          <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 22 }}>
-            description
-          </span>
+        <div style={recentIconBoxStyle} aria-hidden="true">
+          <img src="/icons/file-text.svg" alt="" width={22} height={22} />
         </div>
         <div style={recentMetaStyle}>
           <div style={recentNameStyle} title={entry.name}>
@@ -777,16 +767,25 @@ function RecentCard({
             onDelete(entry);
           }}
         >
-          <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 14 }}>
-            close
-          </span>
+          <img src="/icons/x.svg" alt="" aria-hidden="true" width={14} height={14} />
         </button>
       )}
     </div>
   );
 }
 
-export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps): React.JSX.Element {
+export function Home({
+  onNewDocument,
+  onSelectTemplate,
+  onOpenFile,
+  personalFileSource,
+  onOpenPersonalFile,
+  onLogout,
+  locale = 'vi',
+  onLocaleChange,
+  themeMode = 'light',
+  onThemeChange,
+}: HomeProps): React.JSX.Element {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -825,13 +824,54 @@ export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps)
   };
   const autoReopenCandidate = autoReopenDismissed ? null : (recents[0] ?? null);
 
+  // SPEC-2026-11-22: owner server-side library — durable files on
+  // LocalHost /data, listed straight from /files. Refresh/restart safe.
+  const [personalFiles, setPersonalFiles] = useState<FileEntry[]>([]);
+  const [libraryError, setLibraryError] = useState(false);
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [busyFileId, setBusyFileId] = useState<string | null>(null);
+  const refreshPersonalFiles = useCallback(async () => {
+    if (!personalFileSource) return;
+    setLibraryLoading(true);
+    try {
+      setPersonalFiles(await personalFileSource.list());
+      setLibraryError(false);
+    } catch {
+      setLibraryError(true);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [personalFileSource]);
+  useEffect(() => {
+    void refreshPersonalFiles();
+  }, [refreshPersonalFiles]);
+
+  const beginRename = (file: FileEntry) => {
+    setRenamingFileId(file.id);
+    setRenameDraft(file.name);
+  };
+  const saveRename = async (id: string) => {
+    if (!personalFileSource || !renameDraft.trim()) return;
+    setBusyFileId(id);
+    try {
+      await personalFileSource.rename(id, renameDraft.trim());
+      await refreshPersonalFiles();
+      setRenamingFileId(null);
+    } catch {
+      setLibraryError(true);
+    } finally {
+      setBusyFileId(null);
+    }
+  };
   const handleDeleteRecent = (r: RecentFile) => {
     setRecents((prev) => prev.filter((x) => x.id !== r.id));
-    void deleteRecentFile(r.id);
+    void deleteRecentFile(r.id ?? -1);
   };
 
   const handleClearAllRecents = () => {
-    const ids = recents.map((r) => r.id);
+    const ids = recents.map((r) => r.id ?? -1);
     setRecents([]);
     void Promise.all(ids.map((id) => deleteRecentFile(id)));
   };
@@ -878,30 +918,49 @@ export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps)
 
   return (
     <div style={styles.page} data-testid="home-page">
-      <header style={{ ...styles.topBar, ...(isMobile && mobile.topBar) }}>
-        <div style={styles.brandRow}>
-          <img src="/logo.svg" alt="" style={styles.brandLogo} aria-hidden="true" />
-          <div style={styles.brandName}>
-            Casual <span style={{ color: COLORS.brand }}>Editor</span>
-          </div>
-        </div>
-        <div style={styles.topRight}>
-          <a
-            href="https://github.com/schnsrw/docx"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.topLink}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = COLORS.ink;
-              e.currentTarget.style.background = COLORS.surface2;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = COLORS.inkMuted;
-              e.currentTarget.style.background = 'transparent';
-            }}
-          >
-            GitHub
-          </a>
+      <header
+        style={{ ...styles.topBar, ...(isMobile && mobile.topBar) }}
+        data-testid="home-header"
+      >
+        <a
+          href="/"
+          aria-label="Docs home"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: COLORS.ink }}
+        >
+          <img src="/logo.svg" alt="" width={28} height={28} aria-hidden="true" />
+          <span style={{ fontSize: 17, fontWeight: 600 }}>Docs</span>
+        </a>
+        <div style={{ ...styles.topRight, gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {onLocaleChange && (
+            <button
+              type="button"
+              onClick={() => onLocaleChange(locale === 'vi' ? 'en' : 'vi')}
+              aria-label={t(locale === 'vi' ? 'app.switchToEnglish' : 'app.switchToVietnamese')}
+              style={{ ...styles.topLink, minWidth: 44, minHeight: 44, background: 'transparent', border: 0, cursor: 'pointer' }}
+            >
+              {locale === 'vi' ? 'EN' : 'VI'}
+            </button>
+          )}
+          {onThemeChange && (
+            <button
+              type="button"
+              onClick={() => onThemeChange(themeMode === 'dark' ? 'light' : 'dark')}
+              aria-label={t(themeMode === 'dark' ? 'app.themeLight' : 'app.themeDark')}
+              style={{ ...styles.topLink, minHeight: 44, background: 'transparent', border: 0, cursor: 'pointer' }}
+            >
+              {themeMode === 'dark' ? t('app.themeLight') : t('app.themeDark')}
+            </button>
+          )}
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              aria-label={t('app.signOut')}
+              style={{ ...styles.topLink, background: 'transparent', border: 0, cursor: 'pointer' }}
+            >
+              {t('app.signOut')}
+            </button>
+          )}
         </div>
       </header>
 
@@ -915,14 +974,76 @@ export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps)
       />
 
       <section style={{ ...styles.hero, ...(isMobile && mobile.hero) }}>
-        <div style={styles.heroEyebrow}>Casual Editor</div>
         <h1 style={{ ...styles.heroTitle, ...(isMobile && mobile.heroTitle) }}>
-          {t('home.heroTitle')}
+          {t('home.workspaceTitle')}
         </h1>
-        <p style={{ ...styles.heroLede, ...(isMobile && mobile.heroLede) }}>
-          {t('home.heroLedePart1')} <code>.docx</code> {t('home.heroLedePart2')}
-        </p>
       </section>
+
+      {personalFileSource && (
+        <section
+          style={{ ...styles.section, ...(isMobile && mobile.section) }}
+          data-testid="home-personal-files"
+        >
+          <div style={{ ...styles.sectionHead, ...(isMobile && mobile.sectionHead) }}>
+            <h2 style={styles.sectionTitle}>{t('home.myFiles')}</h2>
+            <span style={styles.sectionHint}>{t('home.myFilesHint')}</span>
+          </div>
+          {libraryError && (
+            <div role="alert" style={{ color: COLORS.inkMuted, fontSize: 13, marginBottom: 8 }}>
+              {t('home.myFilesError')}{' '}
+              <button type="button" onClick={() => void refreshPersonalFiles()} style={{ border: 0, background: 'transparent', textDecoration: 'underline', cursor: 'pointer', color: 'inherit' }}>
+                {t('common.retry')}
+              </button>
+            </div>
+          )}
+          {libraryLoading ? (
+            <p style={{ fontSize: 13, color: COLORS.inkMuted, margin: 0 }} role="status">{t('home.myFilesLoading')}</p>
+          ) : personalFiles.length === 0 ? (
+            <p style={{ fontSize: 13, color: COLORS.inkMuted, margin: 0 }}>
+              {t('home.myFilesEmpty')}
+            </p>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+              {personalFiles.map((f) => (
+                <li key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  {renamingFileId === f.id ? (
+                    <form
+                      onSubmit={(event) => { event.preventDefault(); void saveRename(f.id); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0 }}
+                    >
+                      <input
+                        autoFocus
+                        value={renameDraft}
+                        onChange={(event) => setRenameDraft(event.target.value)}
+                        aria-label={t('home.rename')}
+                        style={{ flex: 1, minWidth: 0, minHeight: 44, border: 0, borderRadius: 12, background: 'var(--color-surface-alt, #f6f6f6)', padding: '8px 12px', color: COLORS.ink, font: 'inherit' }}
+                      />
+                      <button type="submit" disabled={busyFileId === f.id} style={{ minHeight: 44, border: 0, borderRadius: 10, padding: '0 12px', background: 'var(--color-hover, #f0f0f0)', color: COLORS.ink, cursor: 'pointer' }}>{t('common.save')}</button>
+                      <button type="button" onClick={() => setRenamingFileId(null)} style={{ minHeight: 44, border: 0, borderRadius: 10, padding: '0 12px', background: 'transparent', color: COLORS.inkMuted, cursor: 'pointer' }}>{t('common.cancel')}</button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        data-testid={`personal-file-${f.id}`}
+                        onClick={() => onOpenPersonalFile?.(f.id, f.name)}
+                        style={{ flex: 1, minWidth: 0, minHeight: 48, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: COLORS.surfaceRaised, border: `1px solid ${COLORS.border}`, borderRadius: 12, cursor: 'pointer', fontSize: 14, color: COLORS.ink }}
+                      >
+                        <img src="/icons/file-text.svg" alt="" aria-hidden="true" width={18} height={18} style={{ flexShrink: 0 }} />
+                        <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                        <span style={{ marginLeft: 'auto', fontSize: 12, color: COLORS.inkSubtle, flexShrink: 0 }}>{formatSize(f.size)}</span>
+                      </button>
+                      <button type="button" aria-label={t('home.rename')} title={t('home.rename')} onClick={() => beginRename(f)} style={{ width: 44, minHeight: 44, border: 0, borderRadius: 10, background: 'transparent', cursor: 'pointer' }}>
+                        <img src="/icons/edit.svg" alt="" aria-hidden="true" width={18} height={18} />
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {blankDocument && blankMarkdown && (
         <section
@@ -945,13 +1066,7 @@ export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps)
 
       <section style={{ ...styles.controls, ...(isMobile && mobile.controls) }}>
         <label style={{ ...styles.searchWrap, ...(isMobile && mobile.searchWrap) }}>
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: 18, color: COLORS.inkSubtle }}
-            aria-hidden="true"
-          >
-            search
-          </span>
+          <img src="/icons/search.svg" alt="" aria-hidden="true" width={18} height={18} />
           <input
             type="search"
             placeholder={t('home.searchPlaceholder')}
@@ -966,12 +1081,10 @@ export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps)
           style={{ ...styles.openFileBtn, ...(isMobile && mobile.openFileBtn) }}
           onClick={() => fileInputRef.current?.click()}
           onMouseEnter={(e) => (e.currentTarget.style.background = COLORS.brandHover)}
-          onMouseLeave={(e) => (e.currentTarget.style.background = COLORS.inkSolid)}
+          onMouseLeave={(e) => (e.currentTarget.style.background = COLORS.surfaceRaised)}
           data-testid="home-open-from-disk"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden="true">
-            folder_open
-          </span>
+          <img src="/icons/folder-open.svg" alt="" aria-hidden="true" width={18} height={18} />
           {t('home.openFile')}
         </button>
         <div
@@ -1125,79 +1238,7 @@ export function Home({ onNewDocument, onSelectTemplate, onOpenFile }: HomeProps)
         data-testid="home-file-input"
       />
 
-      <section
-        style={{
-          maxWidth: '1180px',
-          margin: '24px auto 0',
-          padding: isMobile ? '0 16px' : '0 40px',
-        }}
-        aria-label={t('home.aiFeaturesPreRelease')}
-      >
-        <div
-          style={{
-            background: '#e9edff',
-            border: `1px solid #bfdbfe`,
-            borderRadius: '10px',
-            padding: isMobile ? '10px 14px' : '10px 16px',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px 12px',
-            alignItems: 'center',
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-block',
-              fontSize: '10.5px',
-              fontWeight: 700,
-              color: '#1d4ed8',
-              background: '#dbeafe',
-              border: `1px solid #93c5fd`,
-              padding: '2px 8px',
-              borderRadius: '999px',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              flexShrink: 0,
-            }}
-          >
-            {t('home.preRelease')}
-          </span>
-          <span style={{ fontSize: '13px', color: '#475569', lineHeight: 1.4 }}>
-            <strong style={{ color: '#0f172a' }}>{t('home.aiFeaturesComingSoon')}</strong>{' '}
-            {t('home.aiFeaturesDetail')}
-          </span>
-          <a
-            href="https://github.com/CasualOffice/docs#ai-features-pre-release"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              marginLeft: 'auto',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: '#1d4ed8',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-            onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-          >
-            {t('home.learnMore')}
-          </a>
-        </div>
-      </section>
 
-      <footer style={{ ...styles.footer, ...(isMobile && mobile.footer) }}>
-        <span>{t('home.footerCredit')}</span>
-        <a
-          href="https://github.com/schnsrw/docx"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: COLORS.inkMuted, textDecoration: 'none' }}
-        >
-          schnsrw/docx
-        </a>
-      </footer>
     </div>
   );
 }

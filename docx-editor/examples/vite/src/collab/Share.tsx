@@ -2,43 +2,54 @@
  * Copyright (c) 2026 Casual Office. All rights reserved.
  */
 
-// Share button + modal. The "start collaborating" entry point.
+// Share dialog — SPEC-2026-11-22 capability flow.
 //
-// Flow:
-//   1. User clicks "Share for collaboration".
-//   2. We mint a transient room on the collab server (POST /api/rooms)
-//      and seed it with the current document bytes
-//      (POST /api/rooms/{id}/seed).
-//   3. We build a full URL: `${location.origin}/?room=${roomId}&backend=${ws}`.
-//   4. Display in a modal with a copy-to-clipboard button.
-//   5. On the same page, optionally redirect into collab mode by
-//      navigating to the share URL so the local user joins
-//      immediately too.
-//
-// The room + seed live on the Node CasualOffice/collab server, not the
-// legacy Go gateway — joiners fetch the seed bytes on connect and the
-// live Y.Doc (filename included, via its meta map) takes over once
-// Hocuspocus sync completes.
-//
-// The modal is intentionally simple — no portal, no animations,
-// just inline-styled markup so it doesn't require a CSS-in-JS
-// layer or extra deps.
+//   1. Draft without a file: serialize the live editor state and
+//      POST /files first (persist BEFORE sharing — no more
+//      "No document loaded yet" dead end).
+//   2. Mint a guest capability (POST /files/:id/shares/link) — the raw
+//      token comes back exactly once and is embedded in a FRAGMENT
+//      link (`<guest>/#share=…`), never a query string.
+//   3. The owner joins the same durable room via a short-lived room
+//      token (POST /files/:id/collab-token) — kept in memory only.
+//   4. Existing links list with revoke (linkId-addressed; the server
+//      closes that link's active sockets before replying).
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from '@casualoffice/docs';
+import {
+  fetchCollabToken,
+  mintShareLink,
+  rememberCollabToken,
+  serializeError,
+  type MintShareResult,
+} from './collab-session';
 
 export interface ShareDialogProps {
-  /** Current document buffer (the bytes the user is editing). */
-  documentBuffer: ArrayBuffer | null;
-  /** Filename to seed the room with (the live Y.Doc meta map carries the
-   *  canonical name to joiners once Hocuspocus sync completes). */
-  fileName: string;
-  /** Collab server REST base URL (its `/api/rooms` surface). */
-  collabHttp: string;
-  /** Collab ws URL the share URL should embed. */
-  backendWs: string;
   open: boolean;
+  /** Persisted file id, or null while the doc is still an unsaved draft. */
+  fileId: string | null;
+  /** ETag captured from file open / previous server ACK. */
+  fileEtag: string | null;
+  fileName: string;
+  collabHttp: string;
+  /** Serialize the CURRENT editor state to DOCX bytes (used to persist
+   *  a draft before its first share). */
+  serializeDoc: () => Promise<ArrayBuffer>;
+  /** Called as soon as a draft gets a durable fileId + ETag. */
+  onPersisted: (fileId: string, etag: string) => void;
+  /** Called after the owner joined the room (navigates into collab). */
+  onJoinedRoom: (fileId: string, roomId: string) => void;
   onClose: () => void;
+}
+
+interface LinkRow {
+  linkId: string;
+  roomId: string;
+  role: string;
+  expiresAt: number | null;
+  hasPassword: boolean;
+  createdAt: number;
 }
 
 const styles: Record<string, CSSProperties> = {
@@ -53,11 +64,13 @@ const styles: Record<string, CSSProperties> = {
     zIndex: 10000,
   },
   card: {
-    background: '#fff',
+    background: 'var(--color-surface-raised, #fff)',
     borderRadius: 12,
     padding: '24px 28px',
-    maxWidth: 460,
+    maxWidth: 520,
     width: '90%',
+    maxHeight: '86vh',
+    overflowY: 'auto',
     boxShadow: '0 24px 48px rgba(15, 23, 42, 0.18)',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
@@ -65,11 +78,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 17,
     fontWeight: 600,
     margin: 0,
-    color: '#0f172a',
+    color: 'var(--color-text, #111)',
   },
   subtitle: {
     fontSize: 13,
-    color: '#64748b',
+    color: 'var(--color-text-secondary, #666)',
     margin: '6px 0 20px 0',
     lineHeight: 1.5,
   },
@@ -77,187 +90,311 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     gap: 8,
     alignItems: 'stretch',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   urlInput: {
     flex: 1,
     padding: '10px 12px',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    fontSize: 13,
+    border: '1px solid var(--color-divider, #e5e5e5)',
+    borderRadius: 12,
+    fontSize: 12,
     fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
-    color: '#0f172a',
-    background: '#f8fafc',
+    color: 'var(--color-text, #111)',
+    background: 'var(--color-surface-alt, #f6f6f6)',
     outline: 'none',
+    minWidth: 0,
   },
   copyBtn: {
+    minHeight: 44,
     padding: '10px 16px',
-    background: '#2563eb',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
+    background: 'var(--color-surface-raised, #fff)',
+    color: 'var(--color-text, #111)',
+    border: '1px solid var(--color-divider, #e5e5e5)',
+    borderRadius: 12,
     fontSize: 13,
-    fontWeight: 600,
+    fontWeight: 500,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
   copyBtnOk: {
-    background: '#16a34a',
+    background: 'var(--color-hover, #f0f0f0)',
   },
   footerRow: {
     display: 'flex',
     gap: 8,
     justifyContent: 'flex-end',
-    marginTop: 20,
+    marginTop: 16,
   },
   secondaryBtn: {
+    minHeight: 44,
     padding: '8px 14px',
-    background: '#fff',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
+    background: 'transparent',
+    border: '1px solid var(--color-divider, #e5e5e5)',
+    borderRadius: 12,
     fontSize: 13,
-    color: '#475569',
+    color: 'var(--color-text-secondary, #666)',
     cursor: 'pointer',
   },
   primaryBtn: {
+    minHeight: 44,
     padding: '8px 14px',
-    background: '#0f172a',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
+    background: 'var(--color-surface-alt, #f6f6f6)',
+    color: 'var(--color-text, #111)',
+    border: '1px solid var(--color-divider, #e5e5e5)',
+    borderRadius: 12,
     fontSize: 13,
     fontWeight: 500,
     cursor: 'pointer',
   },
   errorBanner: {
-    background: '#fef2f2',
-    color: '#b91c1c',
-    border: '1px solid #fecaca',
+    background: 'var(--color-surface-alt, #f6f6f6)',
+    color: 'var(--color-text, #111)',
+    border: '1px solid var(--color-divider, #e5e5e5)',
     borderRadius: 8,
     padding: '8px 12px',
     fontSize: 13,
     marginBottom: 16,
   },
   spinner: {
-    border: '2px solid #e2e8f0',
-    borderTopColor: '#2563eb',
+    border: '2px solid var(--color-divider, #e5e5e5)',
+    borderTopColor: 'var(--color-accent, #111)',
     borderRadius: '50%',
     width: 18,
     height: 18,
     animation: 'spin 0.8s linear infinite',
     display: 'inline-block',
   },
+  linkList: {
+    marginTop: 8,
+    borderTop: '1px solid var(--color-divider, #e5e5e5)',
+    paddingTop: 8,
+  },
+  linkRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 0',
+    fontSize: 12,
+    color: 'var(--color-text-secondary, #666)',
+  },
+  linkMeta: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  revokeBtn: {
+    padding: '4px 10px',
+    fontSize: 12,
+    background: 'transparent',
+    border: '1px solid var(--color-divider, #e5e5e5)',
+    color: 'var(--color-text-secondary, #666)',
+    borderRadius: 6,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    margin: '14px 0 4px 0',
+  },
 };
 
+type Phase = 'preparing' | 'ready' | 'error';
+
 export function ShareDialog({
-  documentBuffer,
+  open,
+  fileId,
+  fileEtag,
   fileName,
   collabHttp,
-  backendWs,
-  open,
+  serializeDoc,
+  onPersisted,
+  onJoinedRoom,
   onClose,
 }: ShareDialogProps) {
   const { t } = useTranslation();
-  const [state, setState] = useState<'idle' | 'uploading' | 'ready' | 'error'>('idle');
-  const [shareUrl, setShareUrl] = useState('');
+  const [phase, setPhase] = useState<Phase>('preparing');
+  const [persistedFileId, setPersistedFileId] = useState<string | null>(fileId);
+  const [persistedFileEtag, setPersistedFileEtag] = useState<string | null>(fileEtag);
+  const [share, setShare] = useState<MintShareResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [copied, setCopied] = useState(false);
+  const [links, setLinks] = useState<LinkRow[]>([]);
+  const [busyLinkId, setBusyLinkId] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Kick off the upload as soon as the dialog opens.
+  const refreshLinks = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`${collabHttp}/files/${encodeURIComponent(id)}/shares`, {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as { links?: LinkRow[] };
+        setLinks(body.links ?? []);
+      } catch {
+        /* list is best-effort */
+      }
+    },
+    [collabHttp],
+  );
+
+  // Kick off mint as soon as the dialog opens. Persisting a draft and
+  // minting are idempotent enough for V1: every open creates a NEW
+  // link (revocable individually), drafts get persisted once.
   useEffect(() => {
     if (!open) {
-      setState('idle');
-      setShareUrl('');
+      setPhase('preparing');
+      setShare(null);
       setErrorMsg('');
       setCopied(false);
+      setLinks([]);
+      setPersistedFileId(fileId);
+      setPersistedFileEtag(fileEtag);
+      setRetryCount(0);
       return;
     }
-    if (!documentBuffer) {
-      setErrorMsg(t('collab.noDocumentLoaded'));
-      setState('error');
-      return;
-    }
-    setState('uploading');
+    let cancelled = false;
 
-    const mintRoom = async (): Promise<string> => {
-      // 1. Create a fresh transient room. No password — a casual share
-      //    link is open-by-URL; the room drains when everyone leaves.
-      const createRes = await fetch(`${collabHttp}/api/rooms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      if (!createRes.ok) {
-        throw new Error(`HTTP ${createRes.status}: ${await createRes.text().catch(() => '')}`);
-      }
-      const { roomId } = (await createRes.json()) as { roomId: string };
+    void (async () => {
+      try {
+        // Always serialize the live editor state before minting. A saved
+        // file may have unsaved edits since the last autosave; share must
+        // start from the exact state visible in this editor.
+        const bytes = await serializeDoc();
+        let id = fileId;
+        let etag = fileEtag;
+        if (!id) {
+          const form = new FormData();
+          const blob = new Blob([bytes], {
+            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          });
+          form.append('file', blob, fileName || 'Untitled.docx');
+          const createRes = await fetch(`${collabHttp}/files`, {
+            method: 'POST',
+            credentials: 'include',
+            body: form,
+          });
+          if (!createRes.ok) throw new Error(`HTTP ${createRes.status}`);
+          const body = (await createRes.json()) as { file?: { id?: string; etag?: string } };
+          id = body.file?.id ?? null;
+          etag = body.file?.etag ?? null;
+          if (!id || !etag) throw new Error('missing file identity');
+          setPersistedFileEtag(etag);
+        } else {
+          if (!etag) throw new Error('missing file ETag; reload the file before sharing');
+          const saveRes = await fetch(`${collabHttp}/files/${encodeURIComponent(id)}`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'If-Match': etag,
+            },
+            body: bytes,
+          });
+          if (!saveRes.ok) {
+            const body = (await saveRes.json().catch(() => ({}))) as { error?: string };
+            throw new Error(body.error ?? `HTTP ${saveRes.status}`);
+          }
+          const body = (await saveRes.json()) as { file?: { etag?: string } };
+          etag = body.file?.etag ?? null;
+          if (!etag) throw new Error('missing ETag after server save');
+          setPersistedFileEtag(etag);
+        }
+        if (cancelled) return;
+        setPersistedFileId(id);
 
-      // 2. Seed the room with the current document bytes. Joiners GET
-      //    these on connect to start from the same state; future edits
-      //    flow through the Y.Doc.
-      const formData = new FormData();
-      const blob = new Blob([documentBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      });
-      formData.append('file', blob, fileName || 'Untitled.docx');
-      const seedRes = await fetch(`${collabHttp}/api/rooms/${encodeURIComponent(roomId)}/seed`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!seedRes.ok) {
-        throw new Error(`HTTP ${seedRes.status}: ${await seedRes.text().catch(() => '')}`);
+        const minted = await mintShareLink(collabHttp, id, { role: 'edit' });
+        if (cancelled) return;
+        setShare(minted);
+        setPhase('ready');
+        void refreshLinks(id);
+      } catch (err) {
+        if (cancelled) return;
+        setErrorMsg(serializeError(err));
+        setPhase('error');
       }
-      return roomId;
+    })();
+
+    return () => {
+      cancelled = true;
     };
-
-    mintRoom()
-      .then((roomId) => {
-        const url = new URL(window.location.origin);
-        url.searchParams.set('room', roomId);
-        // Casual shared rooms are edit links: App.tsx forwards this grant
-        // to the Hocuspocus WS URL, where the server enforces it.
-        url.searchParams.set('role', 'edit');
-        const sameOriginWs =
-          `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/yjs`;
-        // Production's SPA and collab API share one origin, so omit the
-        // redundant backend override. Keep it for split-origin dev hosts.
-        if (backendWs !== sameOriginWs) url.searchParams.set('backend', backendWs);
-        setShareUrl(url.toString());
-        setState('ready');
-      })
-      .catch((err) => {
-        setErrorMsg(err instanceof Error ? err.message : String(err));
-        setState('error');
-      });
-  }, [open, documentBuffer, fileName, collabHttp, backendWs, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, retryCount]);
 
   const copy = useCallback(async () => {
+    if (!share) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(share.url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
     }
-  }, [shareUrl]);
+  }, [share]);
 
-  const joinNow = useCallback(() => {
-    if (shareUrl) {
-      window.location.href = shareUrl;
+  const joinRoom = useCallback(async () => {
+    if (!share || !persistedFileId) return;
+    if (persistedFileEtag) onPersisted(persistedFileId, persistedFileEtag);
+    const token = await fetchCollabToken(collabHttp, persistedFileId);
+    // Owner room token stays in memory for this tab only — it rides
+    // the WS auth frame, never a URL (SPEC transport rule).
+    rememberCollabToken(persistedFileId, token);
+    onJoinedRoom(persistedFileId, token.roomId);
+  }, [share, persistedFileId, persistedFileEtag, onPersisted, collabHttp, onJoinedRoom]);
+
+  const dismiss = useCallback(() => {
+    // A link creates a durable file/room. Closing the ready dialog enters
+    // that room rather than leaving the owner editing a divergent solo copy.
+    if (share && persistedFileId && phase === 'ready') {
+      void joinRoom();
+    } else {
+      onClose();
     }
-  }, [shareUrl]);
+  }, [share, persistedFileId, phase, joinRoom, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') dismiss();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, dismiss]);
+
+  const revoke = useCallback(
+    async (linkId: string) => {
+      if (!persistedFileId) return;
+      setBusyLinkId(linkId);
+      try {
+        await fetch(
+          `${collabHttp}/files/${encodeURIComponent(persistedFileId)}/shares/link/${encodeURIComponent(linkId)}`,
+          { method: 'DELETE', credentials: 'include' },
+        );
+        await refreshLinks(persistedFileId);
+      } finally {
+        setBusyLinkId(null);
+      }
+    },
+    [persistedFileId, collabHttp, refreshLinks],
+  );
 
   if (!open) return null;
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
+    <div style={styles.backdrop} onClick={dismiss} role="dialog" aria-modal="true">
       <div style={styles.card} onClick={(e) => e.stopPropagation()}>
         <h3 style={styles.title}>{t('collab.shareTitle')}</h3>
-        <p style={styles.subtitle}>{t('collab.shareDescription')}</p>
+        <p style={styles.subtitle}>{t('collab.shareDescriptionV2')}</p>
 
-        {state === 'error' && <div style={styles.errorBanner}>{errorMsg}</div>}
+        {phase === 'error' && <div style={styles.errorBanner}>{errorMsg}</div>}
 
-        {state === 'uploading' && (
+        {phase === 'preparing' && (
           <div
             style={{
               display: 'flex',
@@ -266,19 +403,21 @@ export function ShareDialog({
               color: '#64748b',
               fontSize: 13,
             }}
+            role="status"
           >
             <span style={styles.spinner} />
             {t('collab.preparingShareLink')}
           </div>
         )}
 
-        {state === 'ready' && (
+        {phase === 'ready' && share && (
           <>
             <div style={styles.urlRow}>
               <input
                 style={styles.urlInput}
-                value={shareUrl}
+                value={share.url}
                 readOnly
+                aria-label={t('collab.shareLinkAria')}
                 onFocus={(e) => e.currentTarget.select()}
               />
               <button
@@ -288,21 +427,46 @@ export function ShareDialog({
                 {copied ? t('share.copied') : t('hyperlinkPopup.copyLink')}
               </button>
             </div>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 12px 0' }}>
+              {t('collab.shareFragmentNote')}
+            </p>
+            {links.length > 0 && (
+              <div style={styles.linkList}>
+                <div style={styles.sectionTitle}>{t('collab.existingLinks')}</div>
+                {links.map((l) => (
+                  <div key={l.linkId} style={styles.linkRow}>
+                    <span style={styles.linkMeta}>
+                      {new Date(l.createdAt).toLocaleString()} · {l.role}
+                      {l.expiresAt
+                        ? ` · ${t('collab.expiresOn', { date: new Date(l.expiresAt).toLocaleDateString() })}`
+                        : ''}
+                    </span>
+                    <button
+                      style={styles.revokeBtn}
+                      disabled={busyLinkId === l.linkId}
+                      onClick={() => void revoke(l.linkId)}
+                    >
+                      {t('collab.revokeLink')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={styles.footerRow}>
-              <button style={styles.secondaryBtn} onClick={onClose}>
-                {t('collab.stayInSingleUserMode')}
-              </button>
-              <button style={styles.primaryBtn} onClick={joinNow}>
+              <button style={styles.primaryBtn} onClick={() => void joinRoom()}>
                 {t('collab.joinTheSession')}
               </button>
             </div>
           </>
         )}
 
-        {state === 'error' && (
+        {phase === 'error' && (
           <div style={styles.footerRow}>
             <button style={styles.secondaryBtn} onClick={onClose}>
               {t('common.close')}
+            </button>
+            <button style={styles.primaryBtn} onClick={() => setRetryCount((n) => n + 1)}>
+              {t('common.retry')}
             </button>
           </div>
         )}

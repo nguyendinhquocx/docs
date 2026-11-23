@@ -1,0 +1,78 @@
+name: docs-quoc-app-staging
+services:
+  app:
+    build:
+      context: D:\pcloud\workspace\code\website\docs.quoc.app
+      dockerfile: Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: true
+    environment:
+      CASUAL_FILE_EXT: .docx
+      CASUAL_LOCAL_PATH: /data
+      CASUAL_PERSONAL_MODE: single
+      CASUAL_REDIS_PREFIX: 'docs-quoc-app-staging:room:'
+      CASUAL_SESSION_TTL_DAYS: "45"
+      CASUAL_STORAGE: local
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      PORT: "8080"
+      REDIS_URL: redis://redis:6379
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      timeout: 5s
+      interval: 30s
+      retries: 3
+      start_period: 20s
+    image: docs-quoc-app:staging
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 8080
+        published: "18080"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: D:\pcloud\workspace\code\website\docs.quoc.app\data\staging\collab
+        target: /data
+        bind:
+          create_host_path: true
+  redis:
+    command:
+      - redis-server
+      - --save
+      - "60"
+      - "1"
+      - --appendonly
+      - "no"
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      timeout: 3s
+      interval: 10s
+      retries: 5
+    image: redis:7-alpine
+    networks:
+      default: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: docs-quoc-app-staging-redis-data
+        target: /data
+        volume: {}
+networks:
+  default:
+    name: docs-quoc-app-staging_default
+volumes:
+  docs-quoc-app-staging-redis-data:
+    name: docs-quoc-app-staging_docs-quoc-app-staging-redis-data

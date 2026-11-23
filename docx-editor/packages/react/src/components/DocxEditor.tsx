@@ -851,6 +851,15 @@ export interface DocxEditorProps {
   renderTitleBarRight?: () => ReactNode;
   /** Translation overrides. Import a locale JSON file and pass it directly. */
   i18n?: Translations;
+  /** Limit theme choices for a surface. Private web workspaces pass light/dark;
+   *  desktop keeps the default system/light/dark behavior. */
+  themeModeOptions?: Array<'light' | 'dark' | 'auto'>;
+  /** Hide local-only Saved state when the host persists through a server API. */
+  hideLocalSaveStatus?: boolean;
+  /** Disable the legacy single-slot browser autosave for identity-bound hosts. */
+  disableBrowserAutosave?: boolean;
+  /** Hide the legacy restore banner when recovery cannot prove file identity. */
+  hideAutosaveRestoreBanner?: boolean;
   /**
    * BCP-47 language tag for the document CONTENT (e.g. 'en', 'de', 'fr-CA').
    * Set on the editor root so assistive tech pronounces the content in the
@@ -1831,6 +1840,10 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     documentNameEditable = true,
     renderTitleBarRight,
     i18n,
+    themeModeOptions: requestedThemeModeOptions,
+    hideLocalSaveStatus = false,
+    disableBrowserAutosave = false,
+    hideAutosaveRestoreBanner = false,
     documentLang,
     agentPanel,
     wordCompat = false,
@@ -3390,10 +3403,20 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // fallback — so 'auto' is resolved to a concrete 'light'/'dark' attribute
   // in JS (resolveColorTheme below) and a single [data-theme='dark'] selector
   // drives both the DS palette and the editor chrome.
+  const allowedColorThemes = useMemo<('light' | 'dark' | 'auto')[]>(() => {
+    if (requestedThemeModeOptions?.length) return requestedThemeModeOptions;
+    const desktop =
+      typeof window !== 'undefined' &&
+      Boolean((window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop);
+    return desktop ? ['auto', 'light', 'dark'] : ['light', 'dark'];
+  }, [requestedThemeModeOptions]);
   const [colorTheme, setColorTheme] = useState<'light' | 'dark' | 'auto'>(() => {
-    if (typeof window === 'undefined') return 'auto';
-    const stored = window.localStorage.getItem('casual-editor:color-theme');
-    return stored === 'light' || stored === 'dark' || stored === 'auto' ? stored : 'auto';
+    if (typeof window === 'undefined') return 'light';
+    const stored = window.localStorage.getItem('docs.theme') ?? window.localStorage.getItem('casual-editor:color-theme');
+    if ((stored === 'light' || stored === 'dark' || stored === 'auto') && allowedColorThemes.includes(stored)) {
+      return stored;
+    }
+    return allowedColorThemes.includes('light') ? 'light' : (allowedColorThemes[0] ?? 'light');
   });
   // Resolve the user's choice to the concrete value the CSS keys off of:
   // 'auto' follows the OS via matchMedia, everything else passes through.
@@ -3437,17 +3460,22 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // re-render in the title bar.
   const handleSetColorTheme = useCallback(
     (t: 'light' | 'dark' | 'auto') => {
+      if (!allowedColorThemes.includes(t)) return;
       if (typeof document !== 'undefined') {
         document.documentElement.setAttribute('data-theme', resolveColorTheme(t));
       }
       try {
         window.localStorage.setItem('casual-editor:color-theme', t);
+        if (t !== 'auto') window.localStorage.setItem('docs.theme', t);
       } catch {
         // localStorage may be unavailable (private mode); harmless.
       }
       setColorTheme(t);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('docs-theme-change', { detail: { mode: t } }));
+      }
     },
-    [resolveColorTheme]
+    [resolveColorTheme, allowedColorThemes]
   );
 
   // Hyperlink popup state (Google Docs-style floating popup on link click)
@@ -7573,7 +7601,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   isDirtyRefAuto.current = isDirty;
   useEffect(() => {
     const tick = () => {
-      if (!isDirtyRefAuto.current) return;
+      const onDesktop = !!(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__
+        ?.isDesktop;
+      if (!isDirtyRefAuto.current || (disableBrowserAutosave && !onDesktop)) return;
       void (async () => {
         try {
           const buffer = await handleSave();
@@ -7587,8 +7617,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
           // DISK by the host bridge, so a second copy of the whole document in
           // browser storage is redundant and contradicts the local-only,
           // files-stay-on-disk model. Web keeps the IDB autosave.
-          const onDesktop = !!(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__
-            ?.isDesktop;
           if (!onDesktop) {
             await writeAutosave({
               name: documentName?.trim() || 'Untitled',
@@ -7604,7 +7632,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     };
     const interval = window.setInterval(tick, 30_000);
     return () => window.clearInterval(interval);
-  }, [handleSave, documentName, markDirty]);
+  }, [handleSave, documentName, markDirty, disableBrowserAutosave]);
 
   // File → Make a copy: download the current content as "Copy of <name>.docx".
   // The original document is unchanged, so we don't touch the dirty flag.
@@ -9687,6 +9715,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                             onInsertTextBox={handleInsertTextBox}
                             onSetColorTheme={handleSetColorTheme}
                             colorTheme={colorTheme}
+                            colorThemeOptions={allowedColorThemes}
+                            hideLocalSaveStatus={hideLocalSaveStatus}
                             isDirty={isDirty}
                             isSaving={isSaving}
                             tableContext={state.pmTableContext}
@@ -9738,7 +9768,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                     shows its own restore UI. IndexedDB autosave is also
                     disabled on desktop (see onDesktop guard above). */}
                   {!(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__
-                    ?.isDesktop && (
+                    ?.isDesktop && !hideAutosaveRestoreBanner && (
                     <AutosaveRestoreBanner
                       onRestore={(buf, name) => {
                         void loadBuffer(buf);
@@ -11355,7 +11385,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
                   onStop={voiceTyping.stop}
                 />
                 {showAbout && (
-                  <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+                  <AboutDialog
+                    isOpen={showAbout}
+                    onClose={() => setShowAbout(false)}
+                    appName={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? 'Casual Office' : 'Docs'}
+                    sourceUrl={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? 'https://github.com/CasualOffice/docs' : null}
+                    homepageUrl={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? 'https://casualoffice.org/' : null}
+                    logoUrl={(window as { __deskApp__?: { isDesktop?: boolean } }).__deskApp__?.isDesktop ? undefined : '/logo.svg'}
+                  />
                 )}
                 {showKeyboardShortcuts && (
                   <KeyboardShortcutsDialog

@@ -116,7 +116,7 @@
     "callout": "Callout",
     "translateDocument": "Translate document…",
     "writingAssistant": "Writing assistant…",
-    "aboutCasualEditor": "About Casual Editor",
+    "aboutCasualEditor": "About Docs",
     "edit": "Edit",
     "view": "View",
     "spelling": "Spelling",
@@ -129,7 +129,19 @@
     "characterSpacingExpanded1": "Expanded (+1pt)",
     "characterSpacingExpanded2": "Expanded (+2pt)",
     "characterSpacingCondensed1": "Condensed (−1pt)",
-    "characterSpacingCondensed2": "Condensed (−2pt)"
+    "characterSpacingCondensed2": "Condensed (−2pt)",
+    "voiceTyping": "Voice typing",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "smallCaps": "Small Caps",
+    "allCaps": "All Caps",
+    "showRuler": "Show ruler",
+    "verticalRuler": "Vertical ruler",
+    "spellCheck": "Spell check",
+    "grammarCheck": "Grammar check",
+    "aboutDocs": "About Docs"
   },
   "suggestingBanner": {
     "title": "Suggesting",
@@ -1080,7 +1092,11 @@
     "menuBarAriaLabel": "Menu bar",
     "saving": "Saving…",
     "unsavedChanges": "Unsaved changes",
-    "allChangesSaved": "All changes saved"
+    "allChangesSaved": "All changes saved",
+    "themeSystem": "Match system theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "switchTheme": "Change theme from {current} to {next}"
   },
   "writerStatus": {
     "readyToLoad": "Ready to load",
@@ -1695,7 +1711,7 @@
     "selectSize": "Select size"
   },
   "auth": {
-    "signInHeading": "Sign in to Casual Editor",
+    "signInHeading": "Sign in to Docs",
     "username": "Username",
     "password": "Password",
     "signingIn": "Signing in…",
@@ -1792,7 +1808,14 @@
     "justNow": "just now",
     "minutesAgo": "{n} min ago",
     "hoursAgo": "{n} hr ago",
-    "daysAgo": "{n, plural, one {# day ago} other {# days ago}}"
+    "daysAgo": "{n, plural, one {# day ago} other {# days ago}}",
+    "myFiles": "My files",
+    "myFilesHint": "Stored on your server — survives refresh and restarts",
+    "myFilesEmpty": "No saved documents yet. Create one or import a .docx.",
+    "workspaceTitle": "Your workspace",
+    "rename": "Rename",
+    "myFilesError": "Could not load your files.",
+    "myFilesLoading": "Loading your files…"
   },
   "app": {
     "statusLoadingTemplate": "Loading template…",
@@ -1817,7 +1840,12 @@
     "fileLeftUnchanged": "The file was left unchanged — nothing was saved over it.",
     "restoreUnsavedChanges": "This document had unsaved changes from a previous session. Restore them?",
     "restore": "Restore",
-    "discard": "Discard"
+    "discard": "Discard",
+    "signOut": "Sign out",
+    "switchToEnglish": "Switch language to English",
+    "switchToVietnamese": "Chuyển ngôn ngữ sang tiếng Việt",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme"
   },
   "collab": {
     "shareTitle": "Share for collaboration",
@@ -1838,7 +1866,16 @@
     "connecting": "Connecting",
     "live": "Live",
     "disconnected": "Disconnected",
-    "otherEditorCount": "{count, plural, one {# other editor} other {# others}}"
+    "otherEditorCount": "{count, plural, one {# other editor} other {# others}}",
+    "shareDescriptionV2": "Anyone with this link can edit this document. The link carries a private key in the #fragment — it never reaches servers, logs, or referrers.",
+    "shareLinkAria": "Share link with embedded capability",
+    "shareFragmentNote": "Guests open this link on the share host — no account needed, they see only this document.",
+    "existingLinks": "Existing links",
+    "expiresOn": "expires {date}",
+    "revokeLink": "Revoke",
+    "savingToServer": "Saving…",
+    "savedToServer": "Saved",
+    "saveError": "Save failed — retrying"
   },
   "viewers": {
     "returnToHome": "Return to home",
@@ -1850,5 +1887,27 @@
     "headerBcc": "Bcc",
     "headerReplyTo": "Reply-To",
     "headerDate": "Date"
+  },
+  "shareview": {
+    "documentTitle": "{name} — Docs",
+    "loading": "Loading shared document…",
+    "invalidLinkTitle": "This link is not valid",
+    "invalidLinkBody": "The share link is wrong, expired, or revoked. Ask the owner for a new link.",
+    "revokedTitle": "This link was revoked",
+    "revokedBody": "Access was removed by the document owner. Your tab can no longer read or edit this document.",
+    "connecting": "Connecting to the shared room…",
+    "readOnlyNotice": "You have view-only access.",
+    "editNotice": "You can edit this document together with everyone in the room."
+  },
+  "about": {
+    "title": "About {name}",
+    "description": "Private DOCX workspace",
+    "homepageLink": "Open workspace",
+    "version": "Version",
+    "source": "Source",
+    "engine": "Engine",
+    "engineValue": "ProseMirror + Yjs",
+    "license": "License",
+    "localWorkspace": "Private workspace · {year}"
   }
 }

@@ -397,10 +397,15 @@ export interface ToolbarProps {
   onSetColorTheme?: (theme: 'light' | 'dark' | 'auto') => void;
   /** Current colorTheme setting; drives the title-bar toggle's icon. */
   colorTheme?: 'light' | 'dark' | 'auto';
+  /** Allowed theme choices for this surface. Web workspace uses light/dark;
+   *  desktop offline may retain system/auto mode. */
+  colorThemeOptions?: Array<'light' | 'dark' | 'auto'>;
   /** True when the document has unsaved edits — title bar shows a dot. */
   isDirty?: boolean;
   /** True while save is in flight — title bar shows "Saving…". */
   isSaving?: boolean;
+  /** Hide the editor's local-save badge when the host owns durable save state. */
+  hideLocalSaveStatus?: boolean;
   /** Table context when cursor is in a table */
   tableContext?: {
     isInTable: boolean;

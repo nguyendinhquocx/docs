@@ -33,9 +33,9 @@ URL stays `/sample.docx` for back-compat; its thumbnail is here.
 1. Open `scripts/make-home-templates.mjs`. Define a new body via the
    DSL helpers; add a `writeDocx(..., NEW_BODY)` line at the bottom.
 2. Push an entry into `examples/vite/src/templates/manifest.ts` —
-   pick a `category` (`Personal | Work | Education | Career`), an
-   `icon` from Material Symbols Outlined, and set `featured: true`
-   if it should show in the hero strip.
+   pick a `category` (`Personal | Work | Education | Career`) and set
+   `featured: true` if it should show in the featured strip. Home uses
+   local Tabler file icons; template content/preview stays unchanged.
 3. Run `bun scripts/make-home-templates.mjs` then
    `bun scripts/make-template-thumbs.mjs`.
 4. Reload the editor.

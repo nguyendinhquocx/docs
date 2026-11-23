@@ -1,93 +1,44 @@
-# Production deploy — collab server (one origin)
+# Docs personal workspace — deployment contract
 
-Real-time collaboration AND the REST surface run on the shared
-[`collab`](../collab) server (Hocuspocus + Yjs on Fastify), which also
-serves the bundled editor SPA. Production runs **one** app container
-behind Caddy for TLS:
+`docs.quoc.app` is the owner-only workspace. `docx.quoc.app` is the guest-only share surface. Both hostnames terminate at the same collab service, but the origin enforces an exact host/route matrix; Cloudflare Access is not the only security boundary.
 
-```
-            ┌─────────── Caddy (proxy) ───────────┐
-  client ──▶│  everything    → app :8080          │
-            └──────────────────────────────────────┘
-                              │
-                    app (collab server)
-                    /          → bundled editor SPA
-                    /yjs       → Hocuspocus WS (Y.Doc per room)
-                    /api/rooms → share-link / seed
-                    /auth /files /wopi → Mode 2/3 host surface
-```
+## Runtime shape
 
-The editor reaches the WS broker at **same-origin `/yjs`** (the App.tsx
-same-origin default), so nothing host-specific is baked into the SPA
-build.
+- Fastify serves the owner SPA, owner session/file routes, and Hocuspocus `/yjs`.
+- Owner host: Cloudflare Access at the edge **and** origin verification of `Cf-Access-Jwt-Assertion` (RS256/JWKS, exact team issuer, owner-app AUD, time claims, allowlisted identity).
+- Guest host: no Access login. It serves `share.html` and token-scoped `/api/share/**` + `/yjs`; the capability travels in `#share=` and is sent only in `Authorization` headers / the Hocuspocus authentication frame.
+- DOCX files live under `/data`; Redis is a rebuildable Y.Doc cache. SQLite stores owner sessions, files, room/file bindings, link digests, leases, and commit journals. The local host commits immutable versioned blobs and atomically swaps one metadata pointer.
+- `/health` is loopback-only. Host ports bind `127.0.0.1`; there is no public Docker port.
 
-## Run
+## Isolated staging preflight
 
-```bash
-# from the repo root
-git submodule update --init                 # fetch the collab server
-docker compose -f docker-compose.prod.yml up -d --build
-# → http://localhost:8080
-```
+`deploy/docker-compose.staging.yml` is standalone; **do not** combine it with `docker-compose.selfhost.yml`. It uses project `docs-quoc-app-staging`, app port `127.0.0.1:18080`, bind data `../data/staging/collab`, and Redis volume `docs-quoc-app-staging-redis-data`.
 
-For a real domain with automatic HTTPS:
-
-```bash
-COLLAB_SITE_ADDRESS=doc.example.com \
-  docker compose -f docker-compose.prod.yml up -d --build
-# (uncomment the 80/443 ports in the proxy service)
-```
-
-## What matters
-
-- **`/yjs` routing + WebSocket upgrades.** Hocuspocus' WS upgrade lives
-  at `/yjs`. The Caddyfile proxies the whole origin to `app`; any other
-  ingress (nginx, a cloud LB) must pass WebSocket upgrades through.
-- **SPA build has collab on.** The bundled image builds with
-  `VITE_COLLAB_ENABLED=true` (see `../Dockerfile`) and relies on the
-  same-origin `/yjs` default — no `VITE_COLLAB_BACKEND` needed when
-  served same-origin. Point it elsewhere only for split-origin setups.
-- **Persisting state uses separate backends.** `REDIS_URL` stores Y.Doc
-  room snapshots; `CASUAL_STORAGE=local` (or `s3`/`postgres`) stores host
-  files. Neither setting persists the in-memory anonymous room registry
-  or its uploaded DOCX seed; see the fork-specific limitation below.
-- **Format per product.** Docs sets `CASUAL_FILE_EXT=.docx`; sheets
-  deploy the same image with `.xlsx`. On a shared Redis, give each a
-  distinct `CASUAL_REDIS_PREFIX`.
-
-> The legacy in-repo Go gateway (`backend/`) was removed 2026-06-28 once
-> the editor, share-link flow, and this deploy moved fully to the collab
-> server. See `docs/internal/23-collab-server-migration.md`.
-
-## Quoc.app self-host (this fork)
-
-The fork deployment lives at `docs.quoc.app`; source mirror on Windows is
-`D:\pcloud\workspace\code\website\docs.quoc.app`, ProDesk clone is
-`~/apps/docs.quoc.app`. It uses `deploy/docker-compose.selfhost.yml`:
+Preflight is read-only and its rendered output is recorded at `deploy/receipts/staging-compose-config-2026-11-22.txt`:
 
 ```
-git submodule update --init
-docker compose -f deploy/docker-compose.selfhost.yml up -d --build
+docker compose -p docs-quoc-app-staging -f deploy/docker-compose.staging.yml config
 ```
 
-The app binds only `127.0.0.1:8080`. A dedicated Cloudflare Tunnel on
-ProDesk routes `docs.quoc.app` to that loopback origin and passes `/yjs`
-WebSocket upgrades through; no host inbound port is opened. Runtime tunnel
-config/unit stay on ProDesk at `~/.cloudflared/docs-production.yml` and
-`~/.config/systemd/user/cloudflared-docs.service` (no credential is stored
-in this repo).
+Verified rendered values: only loopback port 18080; staging-only bind and Redis volume; no production `../data/collab`, port 8080, tunnel, or credentials. **Do not run `up` until the human checkpoint explicitly accepts this preflight receipt.** This run has not started staging containers.
 
-Share links grant `role=edit`. There is no login or per-user access control
-in this deployment, so treat the URL as a bearer link: anyone who gets it
-can edit that room. Open the generated link once yourself before forwarding
-it; the first browser initializes the Y.Doc from the DOCX seed. The current
-client-side first-writer check is not an atomic server lock, so simultaneous
-first opens remain a race edge case.
+After that checkpoint, staging UAT must use fixture data only and cover owner/guest host routes, identity/JWT checks, guest capability + revoke, WebSocket auth-frame URL inspection, seed lease, concurrent ETag commits, crash recovery, Redis expiry, and browser/mobile UI. Never use the production `/data` volume for tests.
 
-**Durability limitation:** this anonymous `/api/rooms` flow keeps the room
-registry and uploaded DOCX seed in process memory. Redis persists Y.Doc
-snapshots, but after an app/container restart the room ID and seed lookup
-are gone, so existing share links stop working. `CASUAL_STORAGE=local` does
-not make these anonymous room seeds durable. Export/download important DOCX
-files before a restart; durable room metadata/seed storage requires a
-separate product change.
+## Production configuration — NOT CUT OVER
+
+The production Compose file requires these values in ProDesk's runtime environment; keep them out of the repository:
+
+- `CF_ACCESS_TEAM` — Cloudflare team domain.
+- `CF_ACCESS_AUD` — owner-host Access application AUD.
+- `CF_ACCESS_IDENTITIES` — explicit owner identity allowlist.
+- `COLLAB_ROOM_TOKEN_SECRET` — random signing secret for short-lived owner room tokens.
+
+`CASUAL_PERSONAL_MODE=single` opens first-account signup only behind the owner host gate. App sessions roll for 45 days by default (`CASUAL_SESSION_TTL_DAYS`), matching the owner's request to avoid frequent re-login. Guest links expire after 30 days by default and can be revoked by `linkId`; revocation blocks new joins before closing only that link's active sockets.
+
+Before any Cloudflare/DNS/tunnel mutation or production restart:
+
+1. Inspect current `users.db`, files, and legacy share rows; back up the database, `/data` files, and Redis snapshot together. If any legacy share row exists, stop for the owner's hash-migrate vs reissue decision (OQ6).
+2. Create the approved `nguyendinhquocx/collab` fork, keep `upstream` pointing to `CasualOffice/collab`, and update the submodule only after the fork exists. No remote push has been done by this implementation session.
+3. Install and verify Cloudflare Access for `docs.quoc.app`, plus origin JWT validation; configure `docx.quoc.app` as the guest hostname. Test spoofed Host headers through the actual guest ingress.
+4. Verify rollback on staging using a consistent DB + file + Redis snapshot. Record image digest, compose config, tunnel config, and rollback receipt.
+5. Obtain the final production cutover approval, then perform the change. No Cloudflare policy, DNS, tunnel, production container, or production data was changed by this implementation session.

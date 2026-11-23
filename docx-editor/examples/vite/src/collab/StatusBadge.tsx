@@ -54,13 +54,11 @@ export function StatusBadge({ status, peers }: { status: CollabStatus; peers: Co
   };
   const remote = peers.filter((p) => !p.isLocal).length;
   return (
-    <div style={styles.badge}>
+    <div style={styles.badge} className="collab-status-badge">
       <span style={{ ...styles.dot, background: colorByStatus[status] }} />
       <span>{labelByStatus[status]}</span>
       {remote > 0 && (
-        <span style={styles.peers}>
-          · {t('collab.otherEditorCount', { count: remote })}
-        </span>
+        <span style={styles.peers}>· {t('collab.otherEditorCount', { count: remote })}</span>
       )}
     </div>
   );

@@ -7,8 +7,11 @@
 import './desk-bridge-bootstrap';
 
 import './styles.css';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { LocaleProvider } from '@casualoffice/docs';
+import { localeBundle, readAppLocale, writeAppLocale, type AppLocale } from './locales';
 import { setSpellAssetUrls, setWriterWorkerUrl } from '@casualoffice/docs';
 // Vite asset imports — Hunspell dictionary files served as static
 // assets with hashed URLs. The lib doesn't pre-bundle these (its tsup
@@ -30,8 +33,51 @@ setSpellAssetUrls(affUrl, dicUrl);
 import writerWorkerUrl from '../../../packages/react/src/lib/writer/writer.worker.ts?worker&url';
 setWriterWorkerUrl(writerWorkerUrl);
 
+function AppRoot() {
+  const isDesktop = typeof window !== 'undefined' && window.__deskApp__?.isDesktop === true;
+  const [locale, setLocale] = React.useState<AppLocale>(() => (isDesktop ? 'en' : readAppLocale()));
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(() => {
+    try {
+      return localStorage.getItem('docs.theme') === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  React.useEffect(() => {
+    document.documentElement.lang = locale;
+    if (isDesktop) {
+      document.documentElement.removeAttribute('data-web-docs');
+    } else {
+      document.documentElement.setAttribute('data-web-docs', 'true');
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+  }, [isDesktop, locale, theme]);
+
+  const changeLocale = React.useCallback((next: AppLocale) => {
+    writeAppLocale(next);
+    setLocale(next);
+  }, []);
+  const changeTheme = React.useCallback((next: 'light' | 'dark') => {
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    try {
+      localStorage.setItem('docs.theme', next);
+      localStorage.setItem('casual-editor:color-theme', next);
+    } catch {
+      /* browser storage may be unavailable */
+    }
+  }, []);
+
+  return (
+    <LocaleProvider i18n={localeBundle(locale)}>
+      <App locale={locale} onLocaleChange={changeLocale} themeMode={theme} onThemeChange={changeTheme} />
+    </LocaleProvider>
+  );
+}
+
 const container = document.getElementById('app');
 if (container) {
   const root = createRoot(container);
-  root.render(<App />);
+  root.render(<AppRoot />);
 }

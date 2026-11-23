@@ -127,10 +127,11 @@ export interface TitleBarRightProps {
 }
 
 export function TitleBarRight({ children }: TitleBarRightProps) {
+  const { hideLocalSaveStatus } = useEditorToolbar();
   return (
     <div className="flex items-center gap-2 ml-auto flex-shrink-0">
       <WriterStatusPillSlot />
-      <SaveStatusIndicator />
+      {!hideLocalSaveStatus && <SaveStatusIndicator />}
       <ThemeToggleButton />
       {children}
     </div>
@@ -215,31 +216,32 @@ function SaveStatusIndicator() {
 
 function ThemeToggleButton() {
   const ctx = useEditorToolbar();
-  const { onSetColorTheme, colorTheme } = ctx;
+  const { onSetColorTheme, colorTheme, colorThemeOptions } = ctx;
+  const { t } = useTranslation();
   if (!onSetColorTheme) return null;
-  const current = colorTheme ?? 'auto';
-  const next: 'light' | 'dark' | 'auto' =
-    current === 'auto' ? 'light' : current === 'light' ? 'dark' : 'auto';
+  const options: Array<'light' | 'dark' | 'auto'> = colorThemeOptions?.length
+    ? colorThemeOptions
+    : ['auto', 'light', 'dark'];
+  const current = options.includes(colorTheme ?? 'auto') ? (colorTheme ?? options[0]!) : options[0]!;
+  const next = options[(options.indexOf(current) + 1) % options.length]!;
   const icon = current === 'dark' ? 'dark_mode' : current === 'light' ? 'light_mode' : 'contrast';
-  const title =
-    current === 'auto'
-      ? 'Theme: match system (click for light)'
-      : current === 'light'
-        ? 'Theme: light (click for dark)'
-        : 'Theme: dark (click for auto)';
-  return (
-    <Tooltip content={title}>
-      <button
-        type="button"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => onSetColorTheme(next)}
-        aria-label={title}
-        className="flex items-center justify-center w-8 h-8 rounded hover:bg-[color:var(--doc-bg-hover,#f1f3f4)] text-[color:var(--doc-text-on-surface,#1f2937)]"
-      >
-        <MaterialSymbol name={icon} size={18} />
-      </button>
-    </Tooltip>
+  const currentLabel = current === 'auto' ? t('titleBar.themeSystem') : current === 'dark' ? t('titleBar.themeDark') : t('titleBar.themeLight');
+  const nextLabel = next === 'auto' ? t('titleBar.themeSystem') : next === 'dark' ? t('titleBar.themeDark') : t('titleBar.themeLight');
+  const actionLabel = t('titleBar.switchTheme', { current: currentLabel, next: nextLabel });
+  const button = (
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => onSetColorTheme(next)}
+      aria-label={actionLabel}
+      className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-[color:var(--doc-bg-hover,#f1f3f4)] text-[color:var(--doc-text-on-surface,#1f2937)]"
+    >
+      <MaterialSymbol name={icon} size={18} />
+    </button>
   );
+  // Web workspace: no hover tooltip; the translated accessible label is
+  // enough. Desktop keeps the system mode and its explanatory tooltip.
+  return options.length === 2 ? button : <Tooltip content={actionLabel}>{button}</Tooltip>;
 }
 
 // ============================================================================
@@ -301,6 +303,7 @@ export function MenuBar() {
     onInsertTextBox,
     onSetColorTheme,
     colorTheme,
+    colorThemeOptions,
     zoom,
     onZoomChange,
     onUndo,
@@ -334,6 +337,9 @@ export function MenuBar() {
     onRefocusEditor,
     onMenuOpenChange,
   } = ctx;
+  const themeOptions: Array<'light' | 'dark' | 'auto'> = colorThemeOptions?.length
+    ? colorThemeOptions
+    : ['auto', 'light', 'dark'];
 
   // View-toggle handlers + state now arrive via ViewStateContext instead of
   // 14 individual props on the <EditorToolbar> call site (see
@@ -637,7 +643,7 @@ export function MenuBar() {
       ? [
           {
             icon: 'mic',
-            label: voiceTypingActive ? '✓ Voice typing' : 'Voice typing',
+            label: `${voiceTypingActive ? '✓ ' : ''}${t('toolbar.voiceTyping')}`,
             onClick: onToggleVoiceTyping,
           } as MenuEntry,
         ]
@@ -647,7 +653,7 @@ export function MenuBar() {
           { type: 'separator' as const } as MenuEntry,
           {
             icon: 'spellcheck',
-            label: spellCheckEnabled ? '✓ Spelling' : 'Spelling',
+            label: `${spellCheckEnabled ? '✓ ' : ''}${t('toolbar.spelling')}`,
             onClick: onToggleSpellCheck,
           } as MenuEntry,
         ]
@@ -656,31 +662,31 @@ export function MenuBar() {
 
   const formatItems: MenuEntry[] = [
     {
-      label: `${currentFormatting?.bold ? '✓ ' : ''}Bold`,
+      label: `${currentFormatting?.bold ? '✓ ' : ''}${t('toolbar.bold')}`,
       shortcut: 'Ctrl+B',
       onClick: () => handleFormat('bold'),
     } as MenuEntry,
     {
-      label: `${currentFormatting?.italic ? '✓ ' : ''}Italic`,
+      label: `${currentFormatting?.italic ? '✓ ' : ''}${t('toolbar.italic')}`,
       shortcut: 'Ctrl+I',
       onClick: () => handleFormat('italic'),
     } as MenuEntry,
     {
-      label: `${currentFormatting?.underline ? '✓ ' : ''}Underline`,
+      label: `${currentFormatting?.underline ? '✓ ' : ''}${t('toolbar.underline')}`,
       shortcut: 'Ctrl+U',
       onClick: () => handleFormat('underline'),
     } as MenuEntry,
     {
-      label: `${currentFormatting?.strike ? '✓ ' : ''}Strikethrough`,
+      label: `${currentFormatting?.strike ? '✓ ' : ''}${t('toolbar.strikethrough')}`,
       onClick: () => handleFormat('strikethrough'),
     } as MenuEntry,
     { type: 'separator' as const } as MenuEntry,
     {
-      label: `${currentFormatting?.smallCaps ? '✓ ' : ''}Small Caps`,
+      label: `${currentFormatting?.smallCaps ? '✓ ' : ''}${t('toolbar.smallCaps')}`,
       onClick: () => handleFormat('toggleSmallCaps'),
     } as MenuEntry,
     {
-      label: `${currentFormatting?.allCaps ? '✓ ' : ''}All Caps`,
+      label: `${currentFormatting?.allCaps ? '✓ ' : ''}${t('toolbar.allCaps')}`,
       onClick: () => handleFormat('toggleAllCaps'),
     } as MenuEntry,
     { type: 'separator' as const } as MenuEntry,
@@ -744,7 +750,7 @@ export function MenuBar() {
       ? [
           {
             icon: 'straighten',
-            label: `${rulerVisible ? '✓ ' : ''}Show ruler`,
+            label: `${rulerVisible ? '✓ ' : ''}${t('toolbar.showRuler')}`,
             onClick: onToggleShowRuler,
           } as MenuEntry,
         ]
@@ -755,7 +761,7 @@ export function MenuBar() {
       ? [
           {
             icon: 'straighten',
-            label: `${verticalRulerVisible ? '✓ ' : ''}Vertical ruler`,
+            label: `${verticalRulerVisible ? '✓ ' : ''}${t('toolbar.verticalRuler')}`,
             onClick: onToggleShowVerticalRuler,
           } as MenuEntry,
         ]
@@ -781,23 +787,20 @@ export function MenuBar() {
       ? [{ type: 'separator' as const } as MenuEntry]
       : []),
     ...(onSetColorTheme
-      ? [
-          {
-            icon: 'contrast',
-            label: `${colorTheme === 'auto' || !colorTheme ? '✓ ' : ''}Theme: match system`,
-            onClick: () => onSetColorTheme('auto'),
-          } as MenuEntry,
-          {
-            icon: 'light_mode',
-            label: `${colorTheme === 'light' ? '✓ ' : ''}Theme: light`,
-            onClick: () => onSetColorTheme('light'),
-          } as MenuEntry,
-          {
-            icon: 'dark_mode',
-            label: `${colorTheme === 'dark' ? '✓ ' : ''}Theme: dark`,
-            onClick: () => onSetColorTheme('dark'),
-          } as MenuEntry,
-        ]
+      ? themeOptions.map((theme) => {
+          const label =
+            theme === 'auto'
+              ? t('titleBar.themeSystem')
+              : theme === 'light'
+                ? t('titleBar.themeLight')
+                : t('titleBar.themeDark');
+          const icon = theme === 'auto' ? 'contrast' : theme === 'light' ? 'light_mode' : 'dark_mode';
+          return {
+            icon,
+            label: `${colorTheme === theme ? '✓ ' : ''}${label}`,
+            onClick: () => onSetColorTheme(theme),
+          } as MenuEntry;
+        })
       : []),
   ];
 
@@ -1036,7 +1039,7 @@ export function MenuBar() {
       ? [
           {
             icon: 'spellcheck',
-            label: spellcheckEnabled ? '✓ Spell check' : 'Spell check',
+            label: `${spellcheckEnabled ? '✓ ' : ''}${t('toolbar.spellCheck')}`,
             onClick: onToggleSpellcheck,
           } as MenuEntry,
         ]
@@ -1045,7 +1048,7 @@ export function MenuBar() {
       ? [
           {
             icon: 'edit_note',
-            label: grammarEnabled ? '✓ Grammar check' : 'Grammar check',
+            label: `${grammarEnabled ? '✓ ' : ''}${t('toolbar.grammarCheck')}`,
             onClick: onToggleGrammar,
           } as MenuEntry,
         ]
@@ -1117,7 +1120,7 @@ export function MenuBar() {
           { type: 'separator' as const } as MenuEntry,
           {
             icon: 'info',
-            label: t('toolbar.aboutCasualEditor'),
+            label: t('toolbar.aboutDocs'),
             onClick: onShowAbout,
           } as MenuEntry,
         ]
@@ -1192,16 +1195,12 @@ export function MenuBar() {
           // menu re-exposed as a hover-opened submenu of the overflow panel.
           <MenuDropdown
             id="menu-overflow"
-            ariaLabel="Menus"
+            ariaLabel={t('titleBar.menuBarAriaLabel')}
             disabled={disabled}
             label={
-              <span
-                data-testid="menu-overflow"
-                aria-hidden="true"
-                style={{ fontSize: 18, lineHeight: 1, display: 'inline-flex' }}
-              >
-                ☰
-              </span>
+              <svg data-testid="menu-overflow" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
             }
             items={visibleMenus.map((m) => ({
               label: m.label,

@@ -7,7 +7,7 @@
 #
 #   docker compose -f deploy/docker-compose.selfhost.yml up -d --build
 #
-# Fork-specific file (not upstream): kept untracked so upstream merges stay clean.
+# Fork-specific owner workspace config. No account identity, Access AUD, or signing secret is stored here.
 services:
   app:
     build:
@@ -20,19 +20,23 @@ services:
     environment:
       PORT: "8080"
       HOST: "0.0.0.0"
-      # Prod mode: server refuses in-memory Y.Doc storage, so REDIS_URL below
-      # is mandatory. Redis snapshots preserve Y.Doc updates, but the current
-      # anonymous share-room registry and uploaded DOCX seed stay in process
-      # memory; share links do NOT survive an app restart. See deploy/README.md.
       NODE_ENV: "production"
-      # Client IP arrives via cloudflared's X-Forwarded-For; trust it so
-      # rate limiting keys on the real client.
-      TRUST_PROXY: "true"
       CASUAL_FILE_EXT: ".docx"
       CASUAL_STORAGE: "local"
       CASUAL_LOCAL_PATH: "/data"
+      CASUAL_PERSONAL_MODE: "single"
+      CASUAL_SESSION_TTL_DAYS: "45"
       REDIS_URL: "redis://redis:6379"
       CASUAL_REDIS_PREFIX: "casual-docs:room:"
+      # Runtime-only values are provisioned on ProDesk, never committed.
+      CF_OWNER_HOST: "docs.quoc.app"
+      CF_GUEST_HOST: "docx.quoc.app"
+      GUEST_PUBLIC_ORIGIN: "https://docx.quoc.app"
+      CORS_ORIGINS: "https://docs.quoc.app,https://docx.quoc.app"
+      CF_ACCESS_TEAM: ${CF_ACCESS_TEAM:?set the Cloudflare Access team domain in ProDesk runtime env}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:?set the owner Access application AUD in ProDesk runtime env}
+      CF_ACCESS_IDENTITIES: ${CF_ACCESS_IDENTITIES:?set the owner identity allowlist in ProDesk runtime env}
+      COLLAB_ROOM_TOKEN_SECRET: ${COLLAB_ROOM_TOKEN_SECRET:?set a random secret in ProDesk runtime env}
     volumes:
       - ../data/collab:/data
     ports:

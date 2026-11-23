@@ -116,7 +116,7 @@
     "callout": "Выноска",
     "translateDocument": "Перевести документ…",
     "writingAssistant": "Помощник по письму…",
-    "aboutCasualEditor": "О Casual Editor",
+    "aboutCasualEditor": "О Docs",
     "edit": "Правка",
     "view": "Вид",
     "characterSpacingCondensed1": null,
@@ -129,7 +129,19 @@
     "spelling": null,
     "textEffects": null,
     "textOutline": null,
-    "textShadow": null
+    "textShadow": null,
+    "voiceTyping": "Voice typing",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "smallCaps": "Small Caps",
+    "allCaps": "All Caps",
+    "showRuler": "Show ruler",
+    "verticalRuler": "Vertical ruler",
+    "spellCheck": "Spell check",
+    "grammarCheck": "Grammar check",
+    "aboutDocs": "About Docs"
   },
   "suggestingBanner": {
     "title": "Режим предложений",
@@ -1080,7 +1092,11 @@
     "menuBarAriaLabel": "Строка меню",
     "saving": "Сохранение…",
     "unsavedChanges": "Есть несохранённые изменения",
-    "allChangesSaved": "Все изменения сохранены"
+    "allChangesSaved": "Все изменения сохранены",
+    "themeSystem": "Match system theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "switchTheme": "Change theme from {current} to {next}"
   },
   "writerStatus": {
     "readyToLoad": null,
@@ -1641,7 +1657,7 @@
     "forgotPasswordInfo2": null,
     "password": null,
     "signIn": null,
-    "signInHeading": null,
+    "signInHeading": "Sign in to Docs",
     "signingIn": null,
     "username": null
   },
@@ -1762,7 +1778,12 @@
     "statusLoadingTemplate": null,
     "statusSaveAsFailed": null,
     "statusSaveFailed": null,
-    "statusSavedBang": null
+    "statusSavedBang": null,
+    "signOut": "Sign out",
+    "switchToEnglish": "Switch language to English",
+    "switchToVietnamese": "Chuyển ngôn ngữ sang tiếng Việt",
+    "themeLight": "Light theme",
+    "themeDark": "Dark theme"
   },
   "collab": {
     "connecting": null,
@@ -1783,7 +1804,16 @@
     "shareDescription": null,
     "shareTitle": null,
     "stayInSingleUserMode": null,
-    "tryAgain": null
+    "tryAgain": null,
+    "shareDescriptionV2": "Anyone with this link can edit this document. The link carries a private key in the #fragment — it never reaches servers, logs, or referrers.",
+    "shareLinkAria": "Share link with embedded capability",
+    "shareFragmentNote": "Guests open this link on the share host — no account needed, they see only this document.",
+    "existingLinks": "Existing links",
+    "expiresOn": "expires {date}",
+    "revokeLink": "Revoke",
+    "savingToServer": "Saving…",
+    "savedToServer": "Saved",
+    "saveError": "Save failed — retrying"
   },
   "home": {
     "aiFeaturesComingSoon": null,
@@ -1838,7 +1868,14 @@
     "templateSample": null,
     "templateSyllabus": null,
     "templateTravelItinerary": null,
-    "templateWeeklyStatus": null
+    "templateWeeklyStatus": null,
+    "myFiles": "My files",
+    "myFilesHint": "Stored on your server — survives refresh and restarts",
+    "myFilesEmpty": "No saved documents yet. Create one or import a .docx.",
+    "workspaceTitle": "Your documents",
+    "rename": null,
+    "myFilesError": null,
+    "myFilesLoading": null
   },
   "viewers": {
     "headerBcc": null,
@@ -1850,5 +1887,27 @@
     "noSubject": null,
     "readOnlyPlainTextView": null,
     "returnToHome": null
+  },
+  "shareview": {
+    "documentTitle": "{name} — Docs",
+    "loading": "Loading shared document…",
+    "invalidLinkTitle": "This link is not valid",
+    "invalidLinkBody": "The share link is wrong, expired, or revoked. Ask the owner for a new link.",
+    "revokedTitle": "This link was revoked",
+    "revokedBody": "Access was removed by the document owner. Your tab can no longer read or edit this document.",
+    "connecting": "Connecting to the shared room…",
+    "readOnlyNotice": "You have view-only access.",
+    "editNotice": "You can edit this document together with everyone in the room."
+  },
+  "about": {
+    "title": "About {name}",
+    "description": "Private DOCX workspace",
+    "homepageLink": "Open workspace",
+    "version": "Version",
+    "source": "Source",
+    "engine": "Engine",
+    "engineValue": "ProseMirror + Yjs",
+    "license": "License",
+    "localWorkspace": "Private workspace · {year}"
   }
 }
